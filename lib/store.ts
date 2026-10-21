@@ -62,15 +62,3 @@ export async function saveLog(prev: Log, next: Log) {
   if (error) throw new Error(friendly(error));
 }
 
-/** Reads the log saved by the old passcode version of the app (Netlify Blobs), if it is still reachable. */
-export async function readOldLog(pin: string): Promise<Log> {
-  const unlock = await fetch('/api/unlock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) });
-  if (unlock.status === 429) throw new Error('Too many attempts. Wait a minute and try again.');
-  const u = await unlock.json().catch(() => ({})) as { error?: string };
-  if (!unlock.ok) throw new Error(u.error || 'Could not open the old log.');
-  const r = await fetch('/api/log', { cache: 'no-store' });
-  const b = await r.json().catch(() => ({})) as { log?: Log; error?: string };
-  if (!r.ok || !b.log) throw new Error(b.error || 'Could not read the old log.');
-  validateLog(b.log);
-  return b.log;
-}

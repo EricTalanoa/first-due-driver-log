@@ -52,9 +52,6 @@ button{display:inline-flex;align-items:center;justify-content:center;gap:10px}bu
 .sign-in .primary{width:100%;margin-top:4px}
 .sign-in .text-button{display:block;margin:14px auto 0;color:#ff9b93}
 .sign-in-note{font-size:14px;color:#c9f0d8;background:#21402f;padding:10px 12px;border-radius:8px}
-.keypad-cancel{display:block;margin:16px auto 0;color:#ff9b93}
-.move-old{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;padding:16px;border-radius:14px;background:#fff8e7;border:1px solid #f0d9a6;color:#5c430c}
-.move-old>div:first-child{display:flex;flex-direction:column;gap:2px;font-size:14px}
-.move-old strong{font-size:16px}
-.move-actions{display:flex;gap:8px}
-.move-actions .primary{font-size:15px;min-height:44px;padding:10px 16px}
+.sign-in .or{display:flex;align-items:center;gap:10px;margin:16px 0;color:#9aa3ad;font-size:13px}
+.sign-in .or::before,.sign-in .or::after{content:'';flex:1;height:1px;background:#3a414b}
+.sign-in .google{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:52px;border:0;border-radius:10px;background:#fff;color:#20252b;font-size:16px;font-weight:700}

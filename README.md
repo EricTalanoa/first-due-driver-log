@@ -1,6 +1,6 @@
 # First Due Driver’s Log
 
-Personal driving and duty log with First Due Movers branding, a four-digit on-screen passcode keypad, GPS distance estimates, manual entries, and daily print/CSV export.
+Driving and duty log with First Due Movers branding, Supabase sign-in and storage, GPS distance estimates, Simple day and manual entries, and daily print/CSV export.
 
 Live site: https://first-due-driver-log-eric.netlify.app/
 
@@ -9,8 +9,9 @@ Live site: https://first-due-driver-log-eric.netlify.app/
 - Frontend: React and Vite, starting at `index.html` and `app/client.tsx`.
 - Main interface: `app/driver-log.tsx` and `app/globals.css`.
 - Data: Supabase (project `jtofziwssarbifugqjnn`). Tables `profiles` and `entries`, with row-level security so each signed-in driver sees only their own rows. Schema: `supabase/migrations/`. The browser talks to Supabase directly; client code is in `lib/supabase.ts` and `lib/store.ts`.
-- Sign-in: Supabase email and password. Sessions stay signed in on each device; the lock button signs out.
-- Old storage: `netlify/functions/` and Netlify Blobs hold the log from the passcode version. The app offers a one-time "Bring over your old log" using the old passcode. `DRIVER_LOG_PIN_HASH` and `DRIVER_LOG_SESSION_SECRET` stay set in Netlify until that is done.
+- Sign-in: Supabase email and password, or Google. Sessions stay signed in on each device; the lock button signs out.
+- Google sign-in: enable the Google provider in Supabase (Authentication → Sign In / Providers) with a Google Cloud OAuth client. The Google button appears once the provider is on.
+- Moving data in or out: **Backup** downloads the whole log as JSON; **Import** reads that file (or the old Netlify Blobs `log` file) and adds any entries that do not overlap, plus driver details if none are set yet.
 
 ### Build and deploy
 
@@ -21,10 +22,10 @@ npm ci
 npm run build:netlify
 npx netlify login
 npx netlify link
-npx netlify deploy --prod --no-build --dir netlify-dist --functions netlify/functions
+npx netlify deploy --prod --no-build --dir netlify-dist
 ```
 
-For local development, supply the required environment variables in an ignored `.env` file, then run `npx netlify dev`. Use `npm run build:netlify` for this application; the original `build` and `dev` scripts below belong to the retained Sites starter.
+For local development run `npx netlify dev` (no environment variables are needed; the Supabase URL and publishable key are in `lib/supabase.ts`). Use `npm run build:netlify` for this application; the original `build` and `dev` scripts below belong to the retained Sites starter.
 
 GPS mileage adds distances between successive location readings; it does not use road routing. Small movements inside the GPS error are ignored, single impossible jumps are discarded, and the screen is kept awake while driving where the browser supports it. If the phone is locked or the signal drops, the gap is bridged with a straight-line estimate (plus 20% for roads on longer gaps) and gaps over five minutes are flagged to check. Ending a drive takes one fresh location first. Confirm mileage with the odometer.
 
