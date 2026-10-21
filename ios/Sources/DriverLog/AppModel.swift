@@ -59,6 +59,12 @@ final class AppModel: ObservableObject {
         await load()
     }
 
+    /// Pull-to-refresh: SwiftUI cancels its refresh task whenever the screen redraws (the clock ticks every
+    /// second), so run the load in its own task and let the spinner wait for it.
+    func refresh() async {
+        await Task { await self.load() }.value
+    }
+
     func load() async {
         error = nil
         do {
@@ -67,6 +73,9 @@ final class AppModel: ObservableObject {
             loaded = true
             if day.isEmpty { day = clock.dayKey(Date()) }
             resumeDriveIfNeeded()
+        } catch is CancellationError {
+            // Interrupted (e.g. the app went to the background); the next load will catch up.
+        } catch let e as URLError where e.code == .cancelled {
         } catch {
             self.error = error.localizedDescription
         }

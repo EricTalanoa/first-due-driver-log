@@ -60,7 +60,7 @@ struct HistoryScreen: View {
                 .padding(16)
             }
             .background(Brand.page.ignoresSafeArea())
-            .refreshable { await model.load() }
+            .refreshable { await model.refresh() }
             .toolbar { ToolbarItem(placement: .topBarLeading) { BrandTitle() } }
             .navigationBarTitleDisplayMode(.inline)
         }
