@@ -8,9 +8,9 @@ Live site: https://first-due-driver-log-eric.netlify.app/
 
 - Frontend: React and Vite, starting at `index.html` and `app/client.tsx`.
 - Main interface: `app/driver-log.tsx` and `app/globals.css`.
-- API: `netlify/functions/`, with private saved records in Netlify Blobs.
-- Deployment: `netlify.toml` and `vite.netlify.config.ts`.
-- Required server environment variables: `DRIVER_LOG_PIN_HASH` (SHA-256 of your chosen four-digit PIN) and `DRIVER_LOG_SESSION_SECRET` (a random secret for signing sessions). Set these in Netlify; do not commit their values.
+- Data: Supabase (project `jtofziwssarbifugqjnn`). Tables `profiles` and `entries`, with row-level security so each signed-in driver sees only their own rows. Schema: `supabase/migrations/`. The browser talks to Supabase directly; client code is in `lib/supabase.ts` and `lib/store.ts`.
+- Sign-in: Supabase email and password. Sessions stay signed in on each device; the lock button signs out.
+- Old storage: `netlify/functions/` and Netlify Blobs hold the log from the passcode version. The app offers a one-time "Bring over your old log" using the old passcode. `DRIVER_LOG_PIN_HASH` and `DRIVER_LOG_SESSION_SECRET` stay set in Netlify until that is done.
 
 ### Build and deploy
 
