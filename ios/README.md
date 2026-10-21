@@ -19,15 +19,35 @@ The native app for the First Due driver's log, built with SwiftUI and [xtool](ht
 
 ## Run it on your iPhone
 
-The one-time WSL, Swift, usbipd and `xtool setup` steps are the same as in the [Orbit README](https://github.com/EricTalanoa/orbit#one-time-setup-on-windows). Then:
+Windows keeps the phone and relays it to WSL. The **Apple Devices** app (Microsoft Store) runs Apple's phone connector on `127.0.0.1:27015`. A `netsh portproxy` forward exposes that port to WSL, and `USBMUXD_SOCKET_ADDRESS` in Ubuntu points xtool at it. usbipd passthrough doesn't work for installs: `xtool dev` hangs at "Connecting" (xtool issue #19).
 
-```bash
-git clone https://github.com/EricTalanoa/first-due-driver-log.git
-cd first-due-driver-log/ios
-xtool dev
+Each time:
+
+1. Plug in and unlock the iPhone, and open **Apple Devices**.
+2. Admin PowerShell: `usbipd unbind --busid 2-1`. It's fine if it says "already not shared".
+3. Ubuntu: run `idevice_id -l`; it should print the phone's ID.
+4. Build and install:
+
+   ```bash
+   cd ~/first-due-driver-log/ios
+   git pull
+   xtool dev
+   ```
+
+The first time you tap **Start driving**, choose **Allow While Using App** for location.
+
+**One-time setup on a new PC**, in addition to WSL, Swift, xtool and `xtool setup`:
+
+```powershell
+# Admin PowerShell. Use the address Ubuntu prints for: ip route list default | awk '{print $3}'
+netsh interface portproxy add v4tov4 listenaddress=172.31.32.1 listenport=27015 connectaddress=127.0.0.1 connectport=27015
+New-NetFirewallRule -DisplayName "WSL usbmuxd relay" -Direction Inbound -LocalPort 27015 -Protocol TCP -Action Allow
 ```
 
-On first launch iOS asks for location access when you tap **Start driving**: choose **Allow While Using App**.
+```bash
+# Ubuntu: always point at the relay, even if the address changes
+echo 'export USBMUXD_SOCKET_ADDRESS="$(ip route list default | awk '"'"'{print $3}'"'"'):27015"' >> ~/.bashrc
+```
 
 ## One-time Supabase settings
 
