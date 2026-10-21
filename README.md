@@ -11,7 +11,7 @@ Live site: https://first-due-driver-log-eric.netlify.app/
 - Data: Supabase (project `jtofziwssarbifugqjnn`). Tables `profiles` and `entries`, with row-level security so each signed-in driver sees only their own rows. Schema: `supabase/migrations/`. The browser talks to Supabase directly; client code is in `lib/supabase.ts` and `lib/store.ts`.
 - Sign-in: Supabase email and password, or Google. Sessions stay signed in on each device; the lock button signs out.
 - Google sign-in: enable the Google provider in Supabase (Authentication → Sign In / Providers) with a Google Cloud OAuth client. The Google button appears once the provider is on.
-- Moving data in or out: **Backup** downloads the whole log as JSON; **Import** reads that file (or the old Netlify Blobs `log` file) and adds any entries that do not overlap, plus driver details if none are set yet.
+- Moving data in or out: **CSV (all)** downloads every entry as a spreadsheet; **Backup** downloads the whole log as JSON; **Import** reads that file (or the old Netlify Blobs `log` file) and adds any entries that do not overlap, plus driver details if none are set yet.
 
 ### Build and deploy
 
