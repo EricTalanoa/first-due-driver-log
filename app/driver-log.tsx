@@ -180,7 +180,7 @@ function SignInPanel({checking}:{checking:boolean}){
  const [mode,setMode]=useState<'in'|'up'>('in'),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[note,setNote]=useState('');
  async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError('');setNote('');try{
   if(mode==='in'){const {error}=await supabase.auth.signInWithPassword({email:email.trim(),password});if(error)throw new Error(/invalid/i.test(error.message)?'Email or password is incorrect.':/confirm/i.test(error.message)?'Confirm your email first: open the link we sent you, then sign in.':error.message);}
-  else{const {data,error}=await supabase.auth.signUp({email:email.trim(),password,options:{emailRedirectTo:location.origin}});if(error)throw new Error(error.message);if(!data.session){setMode('in');setNote('Account created. Open the confirmation link in your email, then sign in here.');}}
+  else{const {data,error}=await supabase.auth.signUp({email:email.trim(),password,options:{emailRedirectTo:location.origin+'/'}});if(error)throw new Error(error.message);if(!data.session){setMode('in');setNote('Account created. Open the confirmation link in your email, then sign in here.');}}
  }catch(e){setError(e instanceof Error?e.message:'Could not sign in.');}finally{setBusy(false);}}
  const [hasGoogle,setHasGoogle]=useState(false);
  useEffect(()=>{fetch(`${SUPABASE_URL}/auth/v1/settings`,{headers:{apikey:SUPABASE_KEY}}).then(r=>r.ok?r.json() as Promise<{external?:{google?:boolean}}>:null).then(b=>setHasGoogle(!!b?.external?.google)).catch(()=>{});},[]);
