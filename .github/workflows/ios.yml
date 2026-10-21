@@ -2,6 +2,7 @@ name: iOS app
 
 on:
   push:
+    branches: [main]
     paths: ["ios/**", ".github/workflows/ios.yml"]
   pull_request:
     paths: ["ios/**", ".github/workflows/ios.yml"]
@@ -27,6 +28,8 @@ jobs:
 
   screenshots:
     runs-on: macos-latest
+    permissions:
+      contents: write
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -39,3 +42,17 @@ jobs:
         with:
           name: ios-screenshots
           path: ios/ci-shots/*.png
+      - name: Publish to the ios-screenshots branch
+        working-directory: .
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          mkdir /tmp/shots && cp ios/ci-shots/*.png /tmp/shots/
+          git config user.name "driver-log-ci"
+          git config user.email "ci@users.noreply.github.com"
+          git checkout --orphan ios-screenshots
+          git rm -rfq .
+          cp /tmp/shots/*.png .
+          echo "iOS screens from $SHA" > README.md
+          git add *.png README.md
+          git commit -qm "iOS screenshots for $SHA"
+          git push -f origin ios-screenshots
