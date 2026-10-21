@@ -1,167 +1,87 @@
 # First Due Driver’s Log
 
-Driving and duty log with First Due Movers branding, Supabase sign-in and storage, GPS distance estimates, Simple day and manual entries, and daily print/CSV export.
+A driving and duty log for First Due Movers drivers: clock in and out, record drives with GPS miles, fill in a whole work day in a few taps, and keep every day's record on the web and on iPhone.
 
-Live site: https://first-due-driver-log-eric.netlify.app/
+**Live site:** https://first-due-driver-log-eric.netlify.app
+**Status:** website in daily use · iPhone app in testing ([#13](https://github.com/EricTalanoa/first-due-driver-log/pull/13)) · App Store next
 
-## Current Netlify application
+| Log | Drive in progress | History | Simple day |
+|---|---|---|---|
+| ![Log screen](https://github.com/EricTalanoa/first-due-driver-log/raw/ios-screenshots/03-log-on-clock.png) | ![Driving](https://github.com/EricTalanoa/first-due-driver-log/raw/ios-screenshots/04-log-driving.png) | ![History](https://github.com/EricTalanoa/first-due-driver-log/raw/ios-screenshots/06-history.png) | ![Simple day](https://github.com/EricTalanoa/first-due-driver-log/raw/ios-screenshots/07-simple-day.png) |
 
-- Frontend: React and Vite, starting at `index.html` and `app/client.tsx`.
-- Main interface: `app/driver-log.tsx` and `app/globals.css`.
-- Data: Supabase (project `jtofziwssarbifugqjnn`). Tables `profiles` and `entries`, with row-level security so each signed-in driver sees only their own rows. Schema: `supabase/migrations/`. The browser talks to Supabase directly; client code is in `lib/supabase.ts` and `lib/store.ts`.
-- Sign-in: Supabase email and password, or Google. Sessions stay signed in on each device; the lock button signs out.
-- Google sign-in: enable the Google provider in Supabase (Authentication → Sign In / Providers) with a Google Cloud OAuth client. The Google button appears once the provider is on.
-- Moving data in or out: **CSV (all)** downloads every entry as a spreadsheet; **Backup** downloads the whole log as JSON; **Import** reads that file (or the old Netlify Blobs `log` file) and adds any entries that do not overlap, plus driver details if none are set yet.
+<sub>iPhone app with sample data, captured by CI on every change to `ios/`.</sub>
 
-### Build and deploy
+## What it does
 
-Use Node.js 22.13 or newer.
+- **Clock in, clock out, drive.** One card shows the day so far: worked time, miles, and when you clocked in. Start driving records the trip with GPS.
+- **Simple day.** Enter the office, each job's load and unload cities, clock times and lunch; the whole day is laid out with estimated drive times and miles (or your odometer miles). Saved days can be reopened with **Edit day**.
+- **Set status.** On duty, off duty (lunch) and sleeper berth, recorded as duty periods.
+- **Daily log.** Every period for a day with totals per status, editable entries, and **Clear day**.
+- **History.** Days grouped by month with monthly hours and miles; tap a day to open it.
+- **Your data.** CSV export of every entry, JSON backup and import, print or PDF of a day.
+- **Accounts.** Sign in with email or Google; each driver sees only their own log, on every device.
+
+GPS miles are an estimate from the phone's location, not road routing; confirm with the odometer. This is a personal logbook, not a certified ELD.
+
+## How it's built
+
+| Part | Stack | Where |
+|---|---|---|
+| Website | React + Vite, deployed by Netlify from `main` | `app/`, `lib/`, `index.html` |
+| Data & sign-in | Supabase (Postgres, row-level security, email + Google auth) | `supabase/migrations/` |
+| iPhone app | SwiftUI, built from Windows with [xtool](https://github.com/xtool-org/xtool) | `ios/` |
+| CI | GitHub Actions on macOS: core tests, iOS build, simulator screenshots | `.github/workflows/ios.yml` |
+
+Both the website and the app read and write the same Supabase tables:
+
+- `profiles`: driver and vehicle details.
+- `entries`: one row per duty period. The row with no end time is the one being recorded now. A database rule stops duty periods from overlapping.
+- `save_log()`: applies each change in one transaction; clients send only what changed.
+
+The publishable Supabase key is in `lib/supabase.ts` and `ios/Sources/DriverLog/Backend.swift`. It's safe to ship because row-level security limits every query to the signed-in driver.
+
+### GPS
+
+- **Website:** keeps the screen awake while driving, ignores GPS wobble and impossible jumps, and bridges gaps (phone locked, signal lost) with a straight-line estimate. Gaps over five minutes are flagged to check.
+- **iPhone app:** keeps recording with the phone locked, using "While Using" location and a background location session.
+- Both use the same trip rules: `ios/Sources/DriverLogCore/TripMeter.swift` mirrors the website's.
+
+## Working on it
+
+**Website**
 
 ```sh
 npm ci
-npm run build:netlify
-npx netlify login
-npx netlify link
-npx netlify deploy --prod --no-build --dir netlify-dist
+npm run build:netlify      # production build into netlify-dist/
+npx netlify dev            # local dev at http://localhost:8888
 ```
 
-For local development run `npx netlify dev` (no environment variables are needed; the Supabase URL and publishable key are in `lib/supabase.ts`). Use `npm run build:netlify` for this application; the original `build` and `dev` scripts below belong to the retained Sites starter.
+Use Node.js 22.13 or newer. No environment variables are needed. Pushing to `main` deploys to Netlify, and pull requests get a preview link.
 
-GPS mileage adds distances between successive location readings; it does not use road routing. Small movements inside the GPS error are ignored, single impossible jumps are discarded, and the screen is kept awake while driving where the browser supports it. If the phone is locked or the signal drops, the gap is bridged with a straight-line estimate (plus 20% for roads on longer gaps) and gaps over five minutes are flagged to check. Ending a drive takes one fresh location first. Confirm mileage with the odometer.
-
-Simple day lays out a whole shift from the starting office, one or more load/unload jobs, clock times and lunch. Days created this way can be reopened with **Edit day**, and saving replaces that day's entries. **Clear day** deletes every entry that starts on the selected date. This personal logbook is not a certified ELD.
-
-Credentials, generated output, local databases, private access guides, and scratch files are excluded from this repository. Publishing the source to GitHub does not configure automatic Netlify deployments.
-
----
-
-## Retained starter documentation
-
-The original starter and its optional Cloudflare integration are preserved below for reference. The deployed application uses the Netlify setup above.
-
-# vinext-starter
-
-A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
-
-## Prerequisites
-
-- Node.js `>=22.13.0`
-- Portable: Windows, macOS, or Linux; no Bash required
-- Managed Linux: managed Linux runtime with Bash, `flock`, `curl`, `sha256sum`, and GNU `timeout`
-- Git is required only for publishing
-
-## Sites Lifecycle
-
-The Sites initializer copies the shared starter and selects managed-linux only when `SITES_MANAGED_LINUX_CONTAINER=1`; otherwise it selects portable. It saves the selection only in ignored `.sites-runtime/execution-profile.json`. Both profiles copy/configure first, then use the plugin's separate `install-dependencies.mjs` step to measure installation independently. Edit source under `app/` and follow the Sites skill for installation, preview, builds, and publishing.
-
-Run `node <plugin-root>/scripts/configure-execution-profile.mjs` only when the profile is unknown for the current checkout and environment. Profile changes do not alter tracked source or require reinstalling otherwise-valid dependencies; restart an existing preview to use the new selection. Do not commit or upload `.sites-runtime/`.
-
-This starter does not use `wrangler.jsonc`.
-
-`install:ci` runs `npm ci` once against the shared lockfile, disables parent-workspace discovery, and includes required dev/optional dependencies despite production/omit settings. Sharp defaults to prebuilt binaries unless explicitly configured otherwise. Do not overlap installers.
-
-- **Portable:** Preserve host HOME, npm cache, registry, proxy, temporary paths, retry/concurrency settings, and lifecycle-script policy. Use `--prefer-offline --no-audit --no-fund`.
-- **Managed Linux:** Use the existing project-local HOME/cache/tmp setup and Linux install lock, tarball preflight, and timeout. Restore the image-seeded npm cache only when its lockfile hash matches; retain network fallback. Builds keep their existing timeout. These helpers are not invoked by the portable profile.
-
-`scripts/sites-env.mjs` preserves the caller's HOME, npm cache, proxy, XDG, and temporary-directory configuration while defaulting Wrangler and Miniflare state to the checkout. If npm reports an unwritable cache, select a writable path with `npm_config_cache` for that install. The `dev` and `start` scripts also keep Wrangler logs inside the checkout. Generated `.sites-runtime/` and `.wrangler/` directories are disposable and ignored by Git.
-
-On portable, `npm run dev` uses `vinext dev` with HMR, starting at port 5173. Vinext records the running server in ignored `.vinext/` state, rejects an ordinary duplicate launch, and recovers stale state after a stopped process; exactly simultaneous starts can race. Pass `--port <port>` or `--hostname <host>` after `npm run dev --` when needed; keep portable previews on loopback.
-
-For browser QA on managed Linux, use `sites-preview start`. The project's dev script runs Vite and accepts the supervisor's `--host 0.0.0.0 --port 4173 --strictPort` arguments. The internal browser uses `http://terminal.local:4173/`; it is not a user-facing URL. The supervisor owns the preview lifecycle. The ignored local profile survives the supervisor's cleared process environment.
-
-The portable profile simulates ChatGPT sign-in only for loopback development requests. Visit `/signin-with-chatgpt?return_to=/` to sign in as `local_seedy` (`seedy@sites.test`, display name `Seedy`) and `/signout-with-chatgpt?return_to=/` to sign out. The development cookie preserves that identity across server restarts. Mock auth is disabled in the managed-linux profile and is not included in production builds; hosted authentication remains dispatch-owned.
-
-The Worker uses `vinext/server/fetch-handler`, including Vinext's config-aware image handling. After building, `npm start` runs that Worker locally through Wrangler on `127.0.0.1`, sharing `.wrangler/state` with dev preview and local D1 migrations; it does not deploy the site or simulate sign-in. Use the URL printed by the server. Pass `npm start -- --port <port>` to select a different built-preview port.
-
-Local previews use Miniflare's placeholder `Request.cf` metadata without a network lookup. Set `CLOUDFLARE_CF_FETCH_ENABLED=true` to opt into fetching preview metadata; this setting does not change hosted request metadata.
-
-Local tool usage metrics are disabled by default. Set `WRANGLER_SEND_METRICS=true` to opt in.
-
-## Included Shape
-
-- edit site code under `app/`
-- `app/chatgpt-auth.ts` provides optional dispatch-owned ChatGPT sign-in helpers
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/index.ts` reads the D1 binding from the Cloudflare Worker environment
-- `db/schema.ts` starts intentionally empty
-- `@cloudflare/workers-types` provides Worker types; `cloudflare-env.d.ts` declares optional `DB`/`BUCKET` bindings—update these declarations if binding names change
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-Signed-in visitors receive both `oai-authenticated-user-id` and `oai-authenticated-user-email`. Private Sites require every visitor to sign in; public Sites may also have anonymous visitors, for whom neither header is present.
-
-The user ID is stable for the same user on the same Site and different across Sites. Use it as the durable user key; use email and name for display or contact purposes.
-
-SIWC-authenticated workspace sites may also receive `oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty `name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by `oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get("oai-authenticated-user-id");
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
-```
-
-## Optional Dispatch-Owned ChatGPT Sign-In
-
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs optional or required ChatGPT sign-in:
-
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use the returned `userId` as the stable user key for user-owned records; do not use email as a durable identifier.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send anonymous visitors through Sign in with ChatGPT.
-- In a Server Component, start sign-in with `<a href={chatGPTSignInPath(returnTo)} target="_top">`. The auth helper module is server-only; do not import it into a Client Component.
-- Do not use `fetch`, XHR, a client-side router, or a framework link that can prefetch the sign-in route. SIWC must start as a top-level navigation.
-- Never request the AuthAPI authorization endpoint directly. The dispatch-owned `/signin-with-chatgpt` route must start the SIWC flow.
-- Use `chatGPTSignOutPath(returnTo)` for browser sign-out links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because they depend on per-request identity headers.
-
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the OAuth cookies, and identity header injection. Do not implement app routes for those reserved paths. Routes that do not import and call the helper remain anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the Sites hosting platform's access policy controls for workspace-wide restrictions, or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Local D1 migrations
-
-For a D1-backed local preview, generate SQL with `npm run db:generate`. Build once through the Sites skill's build entrypoint (or `npm run build` for standalone use) to generate `dist/server/wrangler.json`, rebuilding if bindings change. From the project root, apply each pending migration in order:
+**iPhone app** — see [`ios/README.md`](ios/README.md). In short, from WSL Ubuntu with the iPhone relayed through the Windows Apple Devices app:
 
 ```sh
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_example.sql
+cd ios
+xtool dev
 ```
 
-Replace the filename with the pending migration and `DB` with your D1 binding name if different. Use `.wrangler/state`, not `.wrangler/state/v3`; Wrangler adds the versioned directories. Do not replay migrations already applied locally. This updates only the preview database; publishing applies production migrations separately.
+**Database changes** go in `supabase/migrations/` and are applied to the Supabase project.
 
-## Diagnostic Commands
+## Roadmap
 
-- `npm run install:ci`: perform the one locked dependency install
-- `npm run dev`: start the Vite/Vinext development server
-- `npm run build`: build the deployable Sites artifact
-- `npm run start`: preview the built Worker locally with D1/R2 support
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+- [x] Simple day with multiple jobs, Edit day, Clear day; better GPS on the web ([#10](https://github.com/EricTalanoa/first-due-driver-log/pull/10))
+- [x] Supabase database and sign-in with Google; import of the old log ([#11](https://github.com/EricTalanoa/first-due-driver-log/pull/11))
+- [x] History grouped by month ([#12](https://github.com/EricTalanoa/first-due-driver-log/pull/12))
+- [ ] iPhone app with background GPS ([#13](https://github.com/EricTalanoa/first-due-driver-log/pull/13), in testing)
+- [ ] App Store: Sign in with Apple, privacy policy, signed TestFlight builds from CI
+- [ ] Remove the unused starter scaffolding (see below)
 
-When using the Sites plugin, follow its skill instructions for installation, builds, and publishing. These npm commands remain available for standalone use.
+## Repository notes
 
-The portable build runs Vinext directly without a host `timeout` command. The managed-linux build uses `scripts/build-verified.sh` and its existing `SITES_BUILD_TIMEOUT` setting.
+The project began from a starter template. These folders and files are left over from it and aren't used by the website or the app:
 
-## Learn More
+- `components/ui/`, `db/`, `drizzle/`, `examples/`
+- `build/`, `scripts/`, `vendor/`
+- `cloudflare-env.d.ts`, `next.config.ts`, `vite.config.ts`, and the `dev`/`build`/`start` npm scripts
 
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+The live site builds with `vite.netlify.config.ts` and `npm run build:netlify`.
