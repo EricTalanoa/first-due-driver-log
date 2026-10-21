@@ -24,6 +24,14 @@ struct LogScreen: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+                    HStack {
+                        BrandTitle()
+                        Spacer()
+                        Button { sheet = .settings } label: {
+                            Image(systemName: "gearshape").font(.title2).foregroundStyle(Brand.ink).frame(width: 44, height: 44)
+                        }
+                        .accessibilityLabel("Driver and vehicle settings")
+                    }
                     if let error = model.error { ErrorBanner(text: error) { Task { await model.load() } } }
                     Button { choosing = true } label: {
                         Label("Add entry", systemImage: "plus").font(.headline).foregroundStyle(Brand.darkRed)
@@ -40,13 +48,7 @@ struct LogScreen: View {
             }
             .background(Brand.page.ignoresSafeArea())
             .refreshable { await model.refresh() }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { BrandTitle() }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { sheet = .settings } label: { Image(systemName: "gearshape") }.accessibilityLabel("Driver and vehicle settings")
-                }
-            }
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
         }
         .confirmationDialog("Add to your log", isPresented: $choosing, titleVisibility: .visible) {
             Button("Simple day") { sheet = .simple }
@@ -85,10 +87,10 @@ struct LogScreen: View {
 struct BrandTitle: View {
     var body: some View {
         HStack(spacing: 8) {
-            if let logo = BrandHeader.logo { Image(uiImage: logo).resizable().scaledToFit().frame(height: 30) }
-            VStack(alignment: .leading, spacing: 0) {
-                Text("FIRST DUE MOVERS").font(.system(size: 9, weight: .bold)).tracking(1.2).foregroundStyle(Brand.red)
-                Text("Driver’s log").font(.headline).foregroundStyle(Brand.ink)
+            if let logo = BrandHeader.logo { Image(uiImage: logo).resizable().scaledToFit().frame(height: 44) }
+            VStack(alignment: .leading, spacing: 1) {
+                Text("FIRST DUE MOVERS").font(.system(size: 11, weight: .bold)).tracking(1.4).foregroundStyle(Brand.red)
+                Text("Driver’s log").font(.title2.weight(.bold)).foregroundStyle(Brand.ink)
             }
         }
     }

@@ -13,6 +13,7 @@ struct HistoryScreen: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
+                    BrandTitle().padding(.bottom, 6)
                     HStack {
                         Eyebrow("Log history", color: Brand.ink)
                         Spacer()
@@ -61,8 +62,7 @@ struct HistoryScreen: View {
             }
             .background(Brand.page.ignoresSafeArea())
             .refreshable { await model.refresh() }
-            .toolbar { ToolbarItem(placement: .topBarLeading) { BrandTitle() } }
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
         }
         .confirmationDialog("Add to your log", isPresented: $choosing, titleVisibility: .visible) {
             Button("Simple day") { sheet = .simple }
@@ -138,6 +138,8 @@ struct SettingsView: View {
                 }
             }
             .onAppear { p = model.log.profile }
+            // If Settings opened before the log finished loading, fill in the details once they arrive.
+            .onChange(of: model.log.profile) { old, new in if p == old { p = new } }
             .alert("Sign out?", isPresented: $confirmSignOut) {
                 Button("Sign out", role: .destructive) { Task { dismiss(); await model.signOut() } }
             } message: { Text("Your log stays saved in your account.") }
