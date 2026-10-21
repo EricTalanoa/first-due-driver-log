@@ -46,3 +46,12 @@ button{display:inline-flex;align-items:center;justify-content:center;gap:10px}bu
 .save-message{min-height:0;margin:0}
 .save-message:not(:empty){position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:20;width:max-content;max-width:calc(100% - 32px);padding:11px 16px;border-radius:10px;background:#20252b;color:#fff;font-size:14px;box-shadow:0 6px 20px #0000003d}
 .duty-panel h2{margin-top:0}
+.sign-in{text-align:left}
+.sign-in h2{text-align:left}
+.sign-in .field{color:#e6e9ee}
+.sign-in .primary{width:100%;margin-top:4px}
+.sign-in .text-button{display:block;margin:14px auto 0;color:#ff9b93}
+.sign-in-note{font-size:14px;color:#c9f0d8;background:#21402f;padding:10px 12px;border-radius:8px}
+.sign-in .or{display:flex;align-items:center;gap:10px;margin:16px 0;color:#9aa3ad;font-size:13px}
+.sign-in .or::before,.sign-in .or::after{content:'';flex:1;height:1px;background:#3a414b}
+.sign-in .google{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:52px;border:0;border-radius:10px;background:#fff;color:#20252b;font-size:16px;font-weight:700}
