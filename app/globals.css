@@ -35,3 +35,13 @@ button{display:inline-flex;align-items:center;justify-content:center;gap:10px}bu
 .export-actions{flex-wrap:wrap;gap:4px 16px}
 .export-actions .text-button{white-space:nowrap}
 }
+.add-entry{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:56px;margin-bottom:16px;border:2px dashed #c9a2a4;border-radius:14px;background:#fff;color:#9a1e24;font-size:17px;font-weight:700}
+.add-entry:hover{background:#fdf6f6;filter:none}
+.clock-buttons{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
+.clock-buttons button{display:flex;align-items:center;justify-content:center;gap:8px;min-height:58px;border-radius:10px;font-size:17px;font-weight:700;border:1px solid #535a63;background:#2c323a;color:#fff}
+.clock-buttons .clock-in:not(:disabled){background:#fff;color:#20252b;border-color:#fff}
+.clock-buttons button:disabled{opacity:.4}
+.drive-card p.clock-since{margin:10px 0 0;font-size:13px;color:#b7bec8}
+.history-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:4px}
+.save-message{min-height:0;margin:0}
+.save-message:not(:empty){position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:20;width:max-content;max-width:calc(100% - 32px);padding:11px 16px;border-radius:10px;background:#20252b;color:#fff;font-size:14px;box-shadow:0 6px 20px #0000003d}
