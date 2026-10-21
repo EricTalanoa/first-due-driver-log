@@ -1,0 +1,41 @@
+name: iOS app
+
+on:
+  push:
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  pull_request:
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: ios
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tool versions
+        run: echo "::notice::$(xcodebuild -version | tr '\n' ' ') / macOS $(sw_vers -productVersion)"
+      - name: Core tests (macOS)
+        # The app target is iOS-only (#if os(iOS)), so this builds and tests the core logic on macOS.
+        run: ci/run.sh swift test
+      - name: Build app (iOS device SDK, unsigned)
+        run: ci/run.sh xcodebuild build -scheme DriverLog -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO -skipPackagePluginValidation -skipMacroValidation
+
+  screenshots:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Simulator screenshots
+        run: ci/run.sh ci/screenshots.sh
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-screenshots
+          path: ios/ci-shots/*.png

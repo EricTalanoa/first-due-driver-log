@@ -1,0 +1,4 @@
+version: 1
+bundleID: com.erictalanoa.FirstDueDriverLog
+iconPath: AppIcon.png
+infoPath: Info.plist

@@ -1,0 +1,28 @@
+name: DriverLogHost
+options:
+  bundleIdPrefix: com.erictalanoa
+packages:
+  DriverLog:
+    path: ../..
+targets:
+  DriverLogHost:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources: [Host.swift]
+    dependencies:
+      - package: DriverLog
+        product: DriverLog
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: Driver Log
+        UILaunchScreen: {}
+        UIUserInterfaceStyle: Light
+        NSLocationWhenInUseUsageDescription: Driver Log uses your location while you are driving to measure trip miles.
+        UIBackgroundModes: [location]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.erictalanoa.DriverLogHost
+        CODE_SIGNING_ALLOWED: "NO"
+        SWIFT_VERSION: "5.0"
