@@ -26,7 +26,9 @@ npx netlify deploy --prod --no-build --dir netlify-dist --functions netlify/func
 
 For local development, supply the required environment variables in an ignored `.env` file, then run `npx netlify dev`. Use `npm run build:netlify` for this application; the original `build` and `dev` scripts below belong to the retained Sites starter.
 
-GPS mileage adds distances between successive location readings; it does not use road routing. Phone locking, backgrounding, and weak GPS can cause gaps. Confirm mileage with the odometer. This personal logbook is not a certified ELD.
+GPS mileage adds distances between successive location readings; it does not use road routing. Small movements inside the GPS error are ignored, single impossible jumps are discarded, and the screen is kept awake while driving where the browser supports it. If the phone is locked or the signal drops, the gap is bridged with a straight-line estimate (plus 20% for roads on longer gaps) and gaps over five minutes are flagged to check. Ending a drive takes one fresh location first. Confirm mileage with the odometer.
+
+Simple day lays out a whole shift from the starting office, one or more load/unload jobs, clock times and lunch. Days created this way can be reopened with **Edit day**, and saving replaces that day's entries. **Clear day** deletes every entry that starts on the selected date. This personal logbook is not a certified ELD.
 
 Credentials, generated output, local databases, private access guides, and scratch files are excluded from this repository. Publishing the source to GitHub does not configure automatic Netlify deployments.
 

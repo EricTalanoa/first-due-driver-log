@@ -1,4 +1,4 @@
-import { epoch, type Entry } from './log';
+import { epoch, dayKey, localInput, type Entry } from './log';
 
 // Plans a whole work day from a few answers: office -> load city -> unload city -> office.
 // Distances are straight-line estimates scaled for roads; there is no live routing.
@@ -43,40 +43,72 @@ export function driveMinutes(mi: number) {
   return Math.round((mi / mph) * 60) + 3;
 }
 
-export type SimpleDay = { date: string; office: Office; load: string; unload: string; clockIn: string; clockOut: string; lunch: number; miles?: number | null };
-export type Plan = { entries: Entry[]; miles: number; driveMin: number; unknown: string[] };
+const oregon = /^(Portland|Gresham|Beaverton|Hillsboro|Lake Oswego|Hood River|Salem|Bend|Eugene)$/;
+/** "Issaquah, WA" style label for a known city. */
+export function place(c: { name: string }) { return `${c.name}, ${oregon.test(c.name) ? 'OR' : 'WA'}`; }
 
-/** Lays out a day: pre-trip, drive to load, load, drive to unload, unload (lunch here), drive back, post-trip. */
+/** Closest known city to a GPS point, if one is within range. */
+export function nearestCity(p: { lat: number; lon: number }, maxMiles = 8) {
+  let best: { name: string; lat: number; lon: number } | null = null, dist = maxMiles;
+  for (const c of Object.values(cities)) { const m = straightMiles(p, c); if (m < dist) { best = c; dist = m; } }
+  return best;
+}
+
+export type Job = { load: string; unload: string };
+export type SimpleDay = { date: string; office: Office; jobs: Job[]; clockIn: string; clockOut: string; lunch: number; miles?: number | null };
+export type Plan = { entries: Entry[]; miles: number; driveMin: number; unknown: string[]; route: string[] };
+
+const SIMPLE_TAG = 'Simple day entry';
+const jobTag = (n: number, total: number) => (total > 1 ? ` (job ${n})` : '');
+
+/**
+ * Lays out a day: pre-trip, then for each job drive to load, load, drive to unload, unload;
+ * drive back, post-trip. Lunch goes in whichever stop is nearest the middle of the shift.
+ */
 export function planSimpleDay(d: SimpleDay, zone: string, newId: () => string = () => crypto.randomUUID()): Plan {
   const office = offices[d.office];
-  const load = findCity(d.load), unload = findCity(d.unload);
-  const unknown = [!load && d.load.trim(), !unload && d.unload.trim()].filter(Boolean) as string[];
-  if (!d.load.trim() || !d.unload.trim()) throw new Error('Enter both a load city and an unload city.');
+  const jobs = d.jobs.map(j => ({ load: j.load.trim(), unload: j.unload.trim() })).filter(j => j.load || j.unload);
+  if (!jobs.length || jobs.some(j => !j.load || !j.unload)) throw new Error(d.jobs.length > 1 ? 'Enter a load city and an unload city for each job.' : 'Enter both a load city and an unload city.');
+  const stops = jobs.flatMap((j, n) => [
+    { text: j.load, city: findCity(j.load), work: `Loading${jobTag(n + 1, jobs.length)}`, drive: `To load${jobTag(n + 1, jobs.length)}` },
+    { text: j.unload, city: findCity(j.unload), work: `Unloading${jobTag(n + 1, jobs.length)}`, drive: `To unload${jobTag(n + 1, jobs.length)}` },
+  ]);
+  const unknown = [...new Set(stops.filter(s => !s.city).map(s => s.text))];
   const t0 = epoch(`${d.date}T${d.clockIn}`, zone), t1 = epoch(`${d.date}T${d.clockOut}`, zone);
   if (t1 <= t0) throw new Error('Clock out must be after clock in.');
   const span = Math.round((t1 - t0) / 60000), lunch = Math.max(0, Math.round(d.lunch));
   if (lunch >= span) throw new Error('Lunch is longer than the whole shift.');
 
+  const points = [office, ...stops.map(s => s.city), office];
   let legs: number[];
-  if (load && unload) legs = [roadMiles(office, load), roadMiles(load, unload), roadMiles(unload, office)];
-  else if (d.miles && d.miles > 0) legs = [d.miles / 3, d.miles / 3, d.miles / 3];
+  if (!unknown.length) legs = points.slice(1).map((p, i) => roadMiles(points[i]!, p!));
+  else if (d.miles && d.miles > 0) legs = points.slice(1).map(() => d.miles! / (points.length - 1));
   else throw new Error(`Couldn't find ${unknown.map(u => `“${u}”`).join(' or ')}. Pick a city from the list, or enter the day's total miles.`);
-  if (d.miles && d.miles > 0 && load && unload) { const est = legs.reduce((a, b) => a + b, 0); legs = legs.map(m => (m * d.miles!) / est); }
+  if (d.miles && d.miles > 0 && !unknown.length) { const est = legs.reduce((a, b) => a + b, 0); legs = legs.map(m => (m * d.miles!) / est); }
   legs = legs.map(m => Math.round(m * 10) / 10);
+  // Rounding each leg can drift from the odometer total; settle the difference on the last leg.
+  if (d.miles && d.miles > 0) legs[legs.length - 1] = Math.max(0, Math.round((d.miles - legs.slice(0, -1).reduce((a, b) => a + b, 0)) * 10) / 10);
 
   const pre = 15, post = 10, minSite = 20;
   let drive = legs.map(driveMinutes);
-  const room = span - lunch - pre - post - 2 * minSite;
+  const room = span - lunch - pre - post - stops.length * minSite;
   if (room <= 0) throw new Error('That shift is too short to fit the drives and stops. Use Advanced for this day.');
   const driveTotal = drive.reduce((a, b) => a + b, 0);
   if (driveTotal > room) drive = drive.map(m => Math.max(4, Math.floor((m * room) / driveTotal)));
   const site = span - lunch - pre - post - drive.reduce((a, b) => a + b, 0);
-  const atLoad = Math.floor(site / 2), atUnload = site - atLoad;
+  const atStop = stops.map((_, i) => Math.floor(site / stops.length) + (i >= stops.length - (site % stops.length) ? 1 : 0));
 
-  const names = [office.label, load ? `${load.name}, WA` : d.load.trim(), unload ? `${unload.name}, WA` : d.unload.trim()];
-  if (load && /^(Portland|Gresham|Beaverton|Hillsboro|Lake Oswego|Hood River|Salem|Bend|Eugene)$/.test(load.name)) names[1] = `${load.name}, OR`;
-  if (unload && /^(Portland|Gresham|Beaverton|Hillsboro|Lake Oswego|Hood River|Salem|Bend|Eugene)$/.test(unload.name)) names[2] = `${unload.name}, OR`;
+  // Pick where lunch goes: the stop closest to the middle of the working time, the later one on a tie.
+  const target = Math.round((span - lunch) / 2);
+  let lunchAt = { stop: -1, after: 0 }, gap = Infinity;
+  for (let i = 0, m = pre; i < stops.length; i++) {
+    m += drive[i];
+    const into = Math.min(Math.max(target - m, 0), atStop[i]), off = Math.abs(target - (m + into));
+    if (off <= gap) { gap = off; lunchAt = { stop: i, after: into }; }
+    m += atStop[i];
+  }
 
+  const names = [office.label, ...stops.map(s => (s.city ? place(s.city) : s.text))];
   const entries: Entry[] = [];
   let t = t0;
   const add = (status: Entry['status'], min: number, from: string, to = '', miles: number | null = null, note = '') => {
@@ -86,13 +118,39 @@ export function planSimpleDay(d: SimpleDay, zone: string, newId: () => string = 
     t = end;
   };
   add('On duty', pre, names[0], '', null, 'Pre-trip inspection / prep at office');
-  add('Driving', drive[0], names[0], names[1], legs[0], 'To load');
-  add('On duty', atLoad, names[1], '', null, 'Loading');
-  add('Driving', drive[1], names[1], names[2], legs[1], 'To unload');
-  if (lunch) { const half = Math.floor(atUnload / 2); add('On duty', half, names[2], '', null, 'Unloading'); add('Off duty', lunch, names[2], '', null, 'Lunch break'); add('On duty', atUnload - half, names[2], '', null, 'Unloading'); }
-  else add('On duty', atUnload, names[2], '', null, 'Unloading');
-  add('Driving', drive[2], names[2], names[0], legs[2], 'Return to office');
+  stops.forEach((s, i) => {
+    add('Driving', drive[i], names[i], names[i + 1], legs[i], s.drive);
+    if (lunch && lunchAt.stop === i) {
+      add('On duty', lunchAt.after, names[i + 1], '', null, s.work);
+      add('Off duty', lunch, names[i + 1], '', null, 'Lunch break');
+      add('On duty', atStop[i] - lunchAt.after, names[i + 1], '', null, s.work);
+    } else add('On duty', atStop[i], names[i + 1], '', null, s.work);
+  });
+  add('Driving', drive[stops.length], names[stops.length], names[0], legs[stops.length], 'Return to office');
   add('On duty', Math.round((t1 - t) / 60000), names[0], '', null, 'Post-trip / unload equipment at office');
-  entries[0].note += ' | Simple day entry: drive times and miles estimated from cities.';
-  return { entries, miles: Math.round(legs.reduce((a, b) => a + b, 0) * 10) / 10, driveMin: drive.reduce((a, b) => a + b, 0), unknown };
+  entries[0].note += ` | ${SIMPLE_TAG}: drive times and miles estimated from cities.`;
+  const route = [d.office, ...stops.map(s => (s.city ? s.city.name : s.text)), 'back'];
+  return { entries, miles: Math.round(legs.reduce((a, b) => a + b, 0) * 10) / 10, driveMin: drive.reduce((a, b) => a + b, 0), unknown, route };
+}
+
+/** Rebuilds the Simple day answers from entries it created earlier, so the day can be edited. */
+export function readSimpleDay(entries: Entry[], zone: string): SimpleDay | null {
+  const es = [...entries].sort((a, b) => a.start - b.start);
+  if (!es.length || !es[0].note.includes(SIMPLE_TAG) || es.some(e => e.end === null)) return null;
+  const office = (Object.keys(offices) as Office[]).find(o => offices[o].label === es[0].from);
+  if (!office) return null;
+  const city = (s: string) => s.replace(/, (WA|OR)$/, '');
+  const jobs: Job[] = [];
+  for (const e of es) {
+    if (e.status !== 'Driving') continue;
+    if (e.note.startsWith('To load')) jobs.push({ load: city(e.to), unload: '' });
+    else if (e.note.startsWith('To unload') && jobs.length) jobs[jobs.length - 1].unload = city(e.to);
+  }
+  if (!jobs.length || jobs.some(j => !j.unload)) return null;
+  const lunch = es.filter(e => e.status === 'Off duty' && e.note === 'Lunch break').reduce((n, e) => n + (e.end! - e.start) / 60000, 0);
+  const day: SimpleDay = { date: dayKey(es[0].start, zone), office, jobs, clockIn: localInput(es[0].start, zone).slice(11), clockOut: localInput(es[es.length - 1].end!, zone).slice(11), lunch: Math.round(lunch), miles: null };
+  // If the saved miles differ from the city estimate, the driver typed odometer miles; keep them.
+  const saved = Math.round(es.reduce((n, e) => n + (e.status === 'Driving' ? e.miles ?? 0 : 0), 0) * 10) / 10;
+  try { if (Math.abs(planSimpleDay(day, zone, () => '').miles - saved) > 0.15) day.miles = saved; } catch { day.miles = saved; }
+  return day;
 }
