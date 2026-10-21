@@ -102,6 +102,7 @@ final class SupabaseBackend: Backend {
     }
 
     private func friendly(_ error: Error) -> Error {
+        if isCancellation(error) { return CancellationError() }
         if let e = error as? PostgrestError {
             if e.code == "23P01" { return LogError("Duty periods cannot overlap. Adjust the times first.") }
             if e.code == "42501" || e.code == "PGRST301" { return LogError("Your sign-in expired. Sign in again; your open form is still here.") }

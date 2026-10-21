@@ -65,7 +65,7 @@ final class AppModel: ObservableObject {
         await Task { await self.load() }.value
     }
 
-    func load() async {
+    func load(retrying: Bool = true) async {
         error = nil
         do {
             let next = try await backend.load()
@@ -73,9 +73,9 @@ final class AppModel: ObservableObject {
             loaded = true
             if day.isEmpty { day = clock.dayKey(Date()) }
             resumeDriveIfNeeded()
-        } catch is CancellationError {
-            // Interrupted (e.g. the app went to the background); the next load will catch up.
-        } catch let e as URLError where e.code == .cancelled {
+        } catch where isCancellation(error) {
+            // A load cut off part-way (a redraw, the app going to the background) isn't a failure: try once more quietly.
+            if retrying { await Task { await self.load(retrying: false) }.value }
         } catch {
             self.error = error.localizedDescription
         }
@@ -94,9 +94,9 @@ final class AppModel: ObservableObject {
         do {
             try await backend.deleteAccount()
             await signOut()
-        } catch {
+        } catch where !isCancellation(error) {
             self.error = error.localizedDescription
-        }
+        } catch {}
     }
 
     // MARK: Saving
@@ -113,7 +113,7 @@ final class AppModel: ObservableObject {
             error = nil
             if let message { show(message) }
         } catch {
-            self.error = error.localizedDescription
+            if !isCancellation(error) { self.error = error.localizedDescription }
             throw error
         }
     }
@@ -278,5 +278,13 @@ final class AppModel: ObservableObject {
         next.profile = p
         try await save(next, message: "Details saved")
     }
+}
+/// True for errors that only mean "this request was interrupted", however a library wraps them.
+func isCancellation(_ error: Error) -> Bool {
+    if error is CancellationError { return true }
+    if (error as? URLError)?.code == .cancelled { return true }
+    let ns = error as NSError
+    if ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled { return true }
+    return String(describing: error).contains("CancellationError") || String(reflecting: error).contains("CancellationError")
 }
 #endif
