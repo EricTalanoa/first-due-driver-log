@@ -45,3 +45,4 @@ button{display:inline-flex;align-items:center;justify-content:center;gap:10px}bu
 .history-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:4px}
 .save-message{min-height:0;margin:0}
 .save-message:not(:empty){position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:20;width:max-content;max-width:calc(100% - 32px);padding:11px 16px;border-radius:10px;background:#20252b;color:#fff;font-size:14px;box-shadow:0 6px 20px #0000003d}
+.duty-panel h2{margin-top:0}
