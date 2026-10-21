@@ -184,7 +184,7 @@ function SignInPanel({checking}:{checking:boolean}){
  }catch(e){setError(e instanceof Error?e.message:'Could not sign in.');}finally{setBusy(false);}}
  const [hasGoogle,setHasGoogle]=useState(false);
  useEffect(()=>{fetch(`${SUPABASE_URL}/auth/v1/settings`,{headers:{apikey:SUPABASE_KEY}}).then(r=>r.ok?r.json() as Promise<{external?:{google?:boolean}}>:null).then(b=>setHasGoogle(!!b?.external?.google)).catch(()=>{});},[]);
- async function google(){setBusy(true);setError('');const {error}=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin}});if(error){setBusy(false);setError(error.message);}}
+ async function google(){setBusy(true);setError('');const {error}=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+'/'}});if(error){setBusy(false);setError(error.message);}}
  return <main className="unlock-page keypad-page"><header><img src="/first-due-logo.webp" alt="First Due Movers"/><div><span className="eyebrow brand">FIRST DUE MOVERS</span><h1>Driver’s log</h1></div></header><section className="keypad-card sign-in"><div className="card-top"><span className="eyebrow">PRIVATE LOGBOOK</span><span className="status-pill"><ShieldCheck size={13}/> {checking?'Checking':'Signed out'}</span></div>
  {checking?<h2>Opening your log…</h2>:<form onSubmit={submit}><h2>{mode==='in'?'Sign in':'Create your account'}</h2><p className="keypad-prompt">{mode==='in'?'You stay signed in on this device.':'One account keeps your log on the web and in the app.'}</p>
   <Field label="Email"><input type="email" required autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)}/></Field>
