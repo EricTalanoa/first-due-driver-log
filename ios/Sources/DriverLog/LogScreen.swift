@@ -4,10 +4,11 @@ import SwiftUI
 
 /// Sheets the Log and History screens can open.
 enum Sheet: Identifiable {
-    case simple, edit(Entry), settings
+    case simple, ld, edit(Entry), settings
     var id: String {
         switch self {
         case .simple: return "simple"
+        case .ld: return "ld"
         case .edit(let e): return "edit-\(e.id)"
         case .settings: return "settings"
         }
@@ -53,8 +54,9 @@ struct LogScreen: View {
         .confirmationDialog("Add to your log", isPresented: $choosing, titleVisibility: .visible) {
             Button("Simple day") { sheet = .simple }
             Button("Advanced entry") { sheet = .edit(newManualEntry()) }
+            Button("LD day") { sheet = .ld }
         } message: {
-            Text("Simple day fills in the whole day from your office, cities, clock times and lunch. Advanced adds one duty period with exact times.")
+            Text("Simple day fills in the whole day from your office, cities, clock times and lunch. Advanced adds one duty period with exact times. LD day is a long-distance day that starts or ends at a hotel.")
         }
         .alert("Clear this day?", isPresented: $confirmClear) {
             Button("Clear day", role: .destructive) { Task { try? await model.clear(day: model.day) } }
@@ -64,6 +66,7 @@ struct LogScreen: View {
         .sheet(item: $sheet) { s in
             switch s {
             case .simple: SimpleDayEditor(day: model.day.isEmpty ? model.today : model.day)
+            case .ld: LdDayEditor(day: model.day.isEmpty ? model.today : model.day)
             case .edit(let e): EntryEditor(entry: e)
             case .settings: SettingsView()
             }
@@ -71,6 +74,7 @@ struct LogScreen: View {
         .onAppear {
             switch LaunchOptions.screen {
             case "simple": sheet = .simple
+            case "ld": sheet = .ld
             case "settings": sheet = .settings
             default: break
             }
@@ -263,7 +267,9 @@ struct DailyLog: View {
     var body: some View {
         let day = model.day.isEmpty ? model.today : model.day
         let view = DayView(log: model.log, day: day, now: model.now)
-        let editable = readSimpleDay(model.entries(startingOn: day), zone: model.log.profile.timeZone) != nil
+        let zone = model.log.profile.timeZone
+        let editable: Sheet? = readSimpleDay(model.entries(startingOn: day), zone: zone) != nil ? Sheet.simple
+            : readLdDay(model.entries(startingOn: day), zone: zone) != nil ? Sheet.ld : nil
         Paper {
             Text("Daily log").font(.title2.weight(.bold)).foregroundStyle(Brand.ink)
             HStack {
@@ -271,8 +277,8 @@ struct DailyLog: View {
                 DatePicker("Log date", selection: dateBinding(day), displayedComponents: .date).labelsHidden()
                 Button { model.day = Clock.shift(day, by: 1) } label: { Image(systemName: "chevron.right") }.accessibilityLabel("Next day")
                 Spacer()
-                if editable {
-                    Button { sheet = .simple } label: { Label("Edit day", systemImage: "pencil") }.buttonStyle(OutlineButtonStyle())
+                if let editable {
+                    Button { sheet = editable } label: { Label("Edit day", systemImage: "pencil") }.buttonStyle(OutlineButtonStyle())
                 }
             }
             .font(.title3)

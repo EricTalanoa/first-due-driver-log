@@ -150,6 +150,155 @@ struct SimpleDayEditor: View {
     }
 }
 
+/// Long-distance day: start at the office or a hotel, an optional unload, end at a hotel or the office.
+struct LdDayEditor: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    let day: String
+    @State private var v = LdDay(date: "")
+    @State private var prior = false
+    @State private var replace = false
+    @State private var error = ""
+    @State private var ready = false
+    @State private var milesInput = ""
+
+    private struct Remembered: Codable { var office: Office; var clockIn: String; var clockOut: String; var lunch: Int }
+
+    var body: some View {
+        let zone = model.log.profile.timeZone
+        let others = model.entries(startingOn: v.date)
+        let blank = { (s: String) in s.trimmingCharacters(in: .whitespaces).isEmpty }
+        let complete = (v.start.at == .office || !blank(v.start.hotel)) && (v.end.at == .office || !blank(v.end.hotel)) && !(v.unload.map(blank) ?? false)
+        let officeToOffice = v.start.at == .office && v.end.at == .office
+        let attempt: Result<Plan, Error>? = (complete || officeToOffice) && ready ? Result { try planLdDay(v, zone: zone, newID: { "preview" }) } : nil
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    DatePicker("Date", selection: dateBinding(zone), displayedComponents: .date)
+                        .font(.subheadline.weight(.semibold))
+                    placePicker("Start of day", $v.start)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Unload").font(.subheadline.weight(.semibold))
+                        Picker("Unload", selection: Binding(get: { v.unload != nil }, set: { v.unload = $0 ? (v.unload ?? "") : nil })) {
+                            Text("No unload").tag(false)
+                            Text("Unload on the way").tag(true)
+                        }
+                        .pickerStyle(.segmented)
+                        if v.unload != nil {
+                            CityField(label: "Unload city", placeholder: "e.g. Ellensburg", text: Binding(get: { v.unload ?? "" }, set: { v.unload = $0 }))
+                        }
+                    }
+                    placePicker("End of day", $v.end)
+                    HStack(spacing: 12) {
+                        TimeField(label: "Clock in", value: $v.clockIn)
+                        TimeField(label: "Clock out", value: $v.clockOut)
+                    }
+                    HStack {
+                        Text("Lunch").font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Picker("Lunch", selection: $v.lunch) {
+                            ForEach(Array(Set([0, 15, 30, 45, 60, v.lunch])).sorted(), id: \.self) { Text($0 == 0 ? "No lunch" : "\($0) minutes").tag($0) }
+                        }
+                    }
+                    if v.miles != nil || (attempt.flatMap { try? $0.get() } == nil && attempt != nil && !officeToOffice) {
+                        TextField("From your odometer", text: $milesInput).keyboardType(.decimalPad).field("Total miles for the day")
+                            .onChange(of: milesInput) { _, text in v.miles = text.isEmpty ? nil : Double(text.replacingOccurrences(of: ",", with: ".")) ?? v.miles }
+                    }
+                    switch attempt {
+                    case .success(let plan):
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("\(milesText(plan.miles)) mi · \(duration(TimeInterval(plan.driveMinutes * 60))) driving").font(.title3.weight(.bold))
+                            Text(plan.route.joined(separator: " → ")).font(.subheadline).foregroundStyle(Brand.onDark)
+                            if v.unload == nil {
+                                Text("With no unload, driving fills the day between pre-trip, lunch and post-trip.").font(.footnote).foregroundStyle(Brand.onDark)
+                            }
+                            if v.miles == nil {
+                                Button("Use odometer miles instead") { v.miles = plan.miles; milesInput = milesText(plan.miles) }.font(.subheadline.weight(.semibold)).foregroundStyle(Color(red: 1, green: 0.61, blue: 0.58))
+                            }
+                        }
+                        .foregroundStyle(.white)
+                        .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Brand.card, in: RoundedRectangle(cornerRadius: 10))
+                    case .failure(let e):
+                        Note(text: e.localizedDescription)
+                    case nil:
+                        EmptyView()
+                    }
+                    if !others.isEmpty {
+                        Toggle(isOn: $replace) {
+                            Text("Replace the \(others.count) \(others.count == 1 ? "entry" : "entries") already logged on this date").font(.subheadline)
+                        }
+                        .padding(12).background(Brand.warnBackground, in: RoundedRectangle(cornerRadius: 8))
+                    }
+                    if !error.isEmpty { Text(error).font(.subheadline).foregroundStyle(.red) }
+                }
+                .padding(20)
+            }
+            .navigationTitle(prior ? "Edit LD day" : "LD day")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(model.busy ? "Saving…" : prior ? "Save day" : "Add day") { Task { await submit(zone) } }
+                        .disabled(model.busy || (try? attempt?.get()) == nil)
+                }
+            }
+        }
+        .onAppear { setUp(zone) }
+    }
+
+    private func placePicker(_ label: String, _ value: Binding<LdPlace>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label).font(.subheadline.weight(.semibold))
+            Picker(label, selection: value.at) {
+                ForEach(LdPlace.At.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            if value.wrappedValue.at == .office {
+                Picker("\(label) office", selection: value.office) {
+                    ForEach(Office.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+            } else {
+                CityField(label: "Hotel city", placeholder: "e.g. Spokane", text: value.hotel)
+            }
+        }
+    }
+
+    private func setUp(_ zone: TimeZone) {
+        guard !ready else { return }
+        if let saved = readLdDay(model.entries(startingOn: day), zone: zone) {
+            v = saved
+            milesInput = saved.miles.map(milesText) ?? ""
+            prior = true
+            replace = true
+        } else {
+            v = LdDay(date: day)
+            // Reuse the office and clock times remembered by Simple day.
+            if let data = UserDefaults.standard.data(forKey: "simple-defaults"), let r = try? JSONDecoder().decode(Remembered.self, from: data) {
+                v.start.office = r.office; v.end.office = r.office; v.clockIn = r.clockIn; v.clockOut = r.clockOut; v.lunch = r.lunch
+            }
+        }
+        ready = true
+    }
+
+    private func submit(_ zone: TimeZone) async {
+        error = ""
+        do {
+            let plan = try planLdDay(v, zone: zone)
+            try await model.saveSimpleDay(plan.entries, date: v.date, replace: replace && !model.entries(startingOn: v.date).isEmpty)
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func dateBinding(_ zone: TimeZone) -> Binding<Date> {
+        let clock = Clock(zone: zone)
+        return Binding(get: { (try? clock.date(day: v.date, time: "12:00")) ?? Date() }, set: { v.date = clock.dayKey($0) })
+    }
+}
+
 /// A text field with city suggestions from the planner's list.
 struct CityField: View {
     let label: String

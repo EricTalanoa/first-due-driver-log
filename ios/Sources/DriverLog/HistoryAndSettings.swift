@@ -70,10 +70,12 @@ struct HistoryScreen: View {
                 let end = Date()
                 sheet = .edit(Entry(status: .driving, start: end.addingTimeInterval(-3600), end: end))
             }
+            Button("LD day") { sheet = .ld }
         }
         .sheet(item: $sheet) { s in
             switch s {
             case .simple: SimpleDayEditor(day: model.today)
+            case .ld: LdDayEditor(day: model.today)
             case .edit(let e): EntryEditor(entry: e)
             case .settings: SettingsView()
             }
