@@ -139,38 +139,46 @@ public struct Plan: Sendable {
 }
 
 private let simpleTag = "Simple day entry"
+private let ldTag = "LD day entry"
 
 private func round1(_ x: Double) -> Double { (x * 10).rounded() / 10 }
 
-/// Lays out a day: pre-trip, then for each job drive to load, load, drive to unload, unload;
-/// drive back, post-trip. Lunch goes in whichever stop is nearest the middle of the shift.
-public func planSimpleDay(_ d: SimpleDay, zone: TimeZone, newID: () -> String = { UUID().uuidString.lowercased() }) throws -> Plan {
-    let clock = Clock(zone: zone)
-    let jobs = d.jobs.map { Job(load: $0.load.trimmingCharacters(in: .whitespaces), unload: $0.unload.trimmingCharacters(in: .whitespaces)) }
-        .filter { !$0.load.isEmpty || !$0.unload.isEmpty }
-    if jobs.isEmpty || jobs.contains(where: { $0.load.isEmpty || $0.unload.isEmpty }) {
-        throw LogError(d.jobs.count > 1 ? "Enter a load city and an unload city for each job." : "Enter both a load city and an unload city.")
-    }
-    struct Stop { let text: String; let city: Place?; let work: String; let drive: String }
-    let tag = { (n: Int) in jobs.count > 1 ? " (job \(n))" : "" }
-    var stops: [Stop] = []
-    for (i, j) in jobs.enumerated() {
-        stops.append(Stop(text: j.load, city: Cities.find(j.load), work: "Loading\(tag(i + 1))", drive: "To load\(tag(i + 1))"))
-        stops.append(Stop(text: j.unload, city: Cities.find(j.unload), work: "Unloading\(tag(i + 1))", drive: "To unload\(tag(i + 1))"))
-    }
-    var unknown: [String] = []
-    for s in stops where s.city == nil && !unknown.contains(s.text) { unknown.append(s.text) }
+/// Where a day starts or ends: its log label, map point (nil if the city is unknown) and notes.
+private struct DayEnd {
+    let name: String
+    let text: String
+    let point: Place?
+    let pre: String
+    let post: String
+    let back: String
+    let route: String
+}
 
-    let t0 = try clock.date(day: d.date, time: d.clockIn), t1 = try clock.date(day: d.date, time: d.clockOut)
+private struct Stop { let text: String; let city: Place?; let work: String; let drive: String }
+
+private func officeEnd(_ o: Office, route: String) -> DayEnd {
+    DayEnd(name: o.label, text: o.rawValue, point: o.point, pre: "Pre-trip inspection / prep at office", post: "Post-trip / unload equipment at office", back: "Return to office", route: route)
+}
+
+/// Lays out a day from start to end through the stops: pre-trip, then drive to and work at each stop,
+/// drive to the end, post-trip. Lunch goes in whichever stop is nearest the middle of the shift.
+/// With no stops (a long-distance drive) the drive fills the shift and lunch splits it in two.
+private func layDay(date: String, clockIn: String, clockOut: String, lunch dayLunch: Int, miles: Double?, start: DayEnd, stops: [Stop], end: DayEnd, tag: String, zone: TimeZone, newID: () -> String) throws -> Plan {
+    let clock = Clock(zone: zone)
+    var unknown: [String] = []
+    if start.point == nil { unknown.append(start.text) }
+    for s in stops where s.city == nil && !unknown.contains(s.text) { unknown.append(s.text) }
+    if end.point == nil && !unknown.contains(end.text) { unknown.append(end.text) }
+
+    let t0 = try clock.date(day: date, time: clockIn), t1 = try clock.date(day: date, time: clockOut)
     guard t1 > t0 else { throw LogError("Clock out must be after clock in.") }
-    let span = Int((t1.timeIntervalSince(t0) / 60).rounded()), lunch = max(0, d.lunch)
+    let span = Int((t1.timeIntervalSince(t0) / 60).rounded()), lunch = max(0, dayLunch)
     guard lunch < span else { throw LogError("Lunch is longer than the whole shift.") }
 
-    let office = d.office.point
     var legs: [Double]
-    let odometer = (d.miles ?? 0) > 0 ? d.miles! : nil
+    let odometer = (miles ?? 0) > 0 ? miles! : nil
     if unknown.isEmpty {
-        let points = [office] + stops.map { $0.city! } + [office]
+        let points = [start.point!] + stops.map { $0.city! } + [end.point!]
         legs = (1..<points.count).map { roadMiles(points[$0 - 1], points[$0]) }
         if let total = odometer { let est = legs.reduce(0, +); legs = legs.map { $0 * total / est } }
     } else if let total = odometer {
@@ -187,7 +195,8 @@ public func planSimpleDay(_ d: SimpleDay, zone: TimeZone, newID: () -> String = 
     let room = span - lunch - pre - post - stops.count * minSite
     guard room > 0 else { throw LogError("That shift is too short to fit the drives and stops. Use Advanced for this day.") }
     let driveTotal = drive.reduce(0, +)
-    if driveTotal > room { drive = drive.map { max(4, Int((Double($0 * room) / Double(driveTotal)).rounded(.down))) } }
+    if stops.isEmpty { drive = [room] }
+    else if driveTotal > room { drive = drive.map { max(4, Int((Double($0 * room) / Double(driveTotal)).rounded(.down))) } }
     let site = span - lunch - pre - post - drive.reduce(0, +)
     let atStop = stops.indices.map { site / stops.count + ($0 >= stops.count - site % stops.count ? 1 : 0) }
 
@@ -202,16 +211,16 @@ public func planSimpleDay(_ d: SimpleDay, zone: TimeZone, newID: () -> String = 
         m += atStop[i]
     }
 
-    let names = [d.office.label] + stops.map { $0.city.map(Cities.label) ?? $0.text }
+    let names = [start.name] + stops.map { $0.city.map(Cities.label) ?? $0.text } + [end.name]
     var entries: [Entry] = []
     var t = t0
     func add(_ status: Status, _ min: Int, _ from: String, _ to: String = "", _ miles: Double? = nil, _ note: String = "") {
         guard min > 0 else { return }
-        let end = t.addingTimeInterval(TimeInterval(min * 60))
-        entries.append(Entry(id: newID(), status: status, start: t, end: end, from: from, to: to, miles: miles, note: note))
-        t = end
+        let finish = t.addingTimeInterval(TimeInterval(min * 60))
+        entries.append(Entry(id: newID(), status: status, start: t, end: finish, from: from, to: to, miles: miles, note: note))
+        t = finish
     }
-    add(.onDuty, pre, names[0], "", nil, "Pre-trip inspection / prep at office")
+    add(.onDuty, pre, names[0], "", nil, start.pre)
     for (i, s) in stops.enumerated() {
         add(.driving, drive[i], names[i], names[i + 1], legs[i], s.drive)
         if lunch > 0 && lunchStop == i {
@@ -222,11 +231,126 @@ public func planSimpleDay(_ d: SimpleDay, zone: TimeZone, newID: () -> String = 
             add(.onDuty, atStop[i], names[i + 1], "", nil, s.work)
         }
     }
-    add(.driving, drive[stops.count], names[stops.count], names[0], legs[stops.count], "Return to office")
-    add(.onDuty, Int((t1.timeIntervalSince(t) / 60).rounded()), names[0], "", nil, "Post-trip / unload equipment at office")
-    entries[0].note += " | \(simpleTag): drive times and miles estimated from cities."
-    let route = [d.office.rawValue] + stops.map { $0.city?.name ?? $0.text } + ["back"]
+    let last = names[stops.count]
+    if stops.isEmpty && lunch > 0 {
+        // Straight through: stop for lunch on the road halfway through the working time.
+        let first = min(drive[0], max(1, target - pre)), firstMiles = round1(legs[0] * Double(first) / Double(drive[0]))
+        add(.driving, first, last, "En route", firstMiles, end.back)
+        add(.offDuty, lunch, "En route", "", nil, "Lunch break")
+        add(.driving, drive[0] - first, "En route", end.name, round1(legs[0] - firstMiles), end.back)
+    } else {
+        add(.driving, drive[stops.count], last, end.name, legs[stops.count], end.back)
+    }
+    add(.onDuty, Int((t1.timeIntervalSince(t) / 60).rounded()), end.name, "", nil, end.post)
+    entries[0].note += " | \(tag): drive times and miles estimated from cities."
+    let route = [start.route] + stops.map { $0.city?.name ?? $0.text } + [end.route]
     return Plan(entries: entries, miles: round1(legs.reduce(0, +)), driveMinutes: drive.reduce(0, +), unknown: unknown, route: route)
+}
+
+/// Lays out a day: pre-trip, then for each job drive to load, load, drive to unload, unload;
+/// drive back, post-trip. Lunch goes in whichever stop is nearest the middle of the shift.
+public func planSimpleDay(_ d: SimpleDay, zone: TimeZone, newID: () -> String = { UUID().uuidString.lowercased() }) throws -> Plan {
+    let jobs = d.jobs.map { Job(load: $0.load.trimmingCharacters(in: .whitespaces), unload: $0.unload.trimmingCharacters(in: .whitespaces)) }
+        .filter { !$0.load.isEmpty || !$0.unload.isEmpty }
+    if jobs.isEmpty || jobs.contains(where: { $0.load.isEmpty || $0.unload.isEmpty }) {
+        throw LogError(d.jobs.count > 1 ? "Enter a load city and an unload city for each job." : "Enter both a load city and an unload city.")
+    }
+    let tag = { (n: Int) in jobs.count > 1 ? " (job \(n))" : "" }
+    var stops: [Stop] = []
+    for (i, j) in jobs.enumerated() {
+        stops.append(Stop(text: j.load, city: Cities.find(j.load), work: "Loading\(tag(i + 1))", drive: "To load\(tag(i + 1))"))
+        stops.append(Stop(text: j.unload, city: Cities.find(j.unload), work: "Unloading\(tag(i + 1))", drive: "To unload\(tag(i + 1))"))
+    }
+    return try layDay(date: d.date, clockIn: d.clockIn, clockOut: d.clockOut, lunch: d.lunch, miles: d.miles,
+                      start: officeEnd(d.office, route: d.office.rawValue), stops: stops, end: officeEnd(d.office, route: "back"),
+                      tag: simpleTag, zone: zone, newID: newID)
+}
+
+// MARK: LD (long-distance) day: starts and/or ends at a hotel, with an optional unload on the way.
+
+public struct LdPlace: Equatable, Sendable {
+    public enum At: String, CaseIterable, Identifiable, Sendable {
+        case office = "Office"
+        case hotel = "Hotel"
+        public var id: String { rawValue }
+    }
+    public var at: At
+    public var office: Office
+    public var hotel: String
+    public init(at: At = .office, office: Office = .preston, hotel: String = "") { self.at = at; self.office = office; self.hotel = hotel }
+}
+
+public struct LdDay: Equatable, Sendable {
+    public var date: String
+    public var start: LdPlace
+    /// nil when there is no unload today.
+    public var unload: String?
+    public var end: LdPlace
+    public var clockIn: String
+    public var clockOut: String
+    public var lunch: Int
+    public var miles: Double?
+
+    public init(date: String, start: LdPlace = LdPlace(), unload: String? = nil, end: LdPlace = LdPlace(at: .hotel), clockIn: String = "07:00", clockOut: String = "17:00", lunch: Int = 30, miles: Double? = nil) {
+        self.date = date
+        self.start = start
+        self.unload = unload
+        self.end = end
+        self.clockIn = clockIn
+        self.clockOut = clockOut
+        self.lunch = lunch
+        self.miles = miles
+    }
+}
+
+private let hotelPrefix = "Hotel – "
+
+private func hotelEnd(_ text: String) -> DayEnd {
+    let city = Cities.find(text)
+    return DayEnd(name: hotelPrefix + (city.map(Cities.label) ?? text), text: text, point: city, pre: "Pre-trip inspection at hotel", post: "Post-trip inspection at hotel", back: "To hotel", route: "Hotel (\(city?.name ?? text))")
+}
+
+/// Lays out a long-distance day: pre-trip at the office or hotel, an optional drive to the unload and
+/// unloading, then the drive to the hotel or back to the office and a post-trip there.
+/// Covers office → hotel, office → unload → hotel, hotel → hotel, hotel → unload → hotel/office, hotel → office.
+/// Mirrors planLdDay in lib/simple-day.ts.
+public func planLdDay(_ d: LdDay, zone: TimeZone, newID: () -> String = { UUID().uuidString.lowercased() }) throws -> Plan {
+    let startHotel = d.start.hotel.trimmingCharacters(in: .whitespaces), endHotel = d.end.hotel.trimmingCharacters(in: .whitespaces)
+    let unload = d.unload?.trimmingCharacters(in: .whitespaces)
+    if d.start.at == .hotel && startHotel.isEmpty { throw LogError("Enter the city of the hotel you started from.") }
+    if d.end.at == .hotel && endHotel.isEmpty { throw LogError("Enter the city of the hotel you ended at.") }
+    if unload == "" { throw LogError("Enter the unload city, or choose No unload.") }
+    if d.start.at == .office && d.end.at == .office { throw LogError("Office to office is a Simple day. Pick a hotel for the start or end, or use Simple day.") }
+    let start = d.start.at == .office ? officeEnd(d.start.office, route: d.start.office.rawValue) : hotelEnd(startHotel)
+    let end = d.end.at == .office ? officeEnd(d.end.office, route: "\(d.end.office.rawValue) office") : hotelEnd(endHotel)
+    let stops = unload.map { [Stop(text: $0, city: Cities.find($0), work: "Unloading", drive: "To unload")] } ?? []
+    return try layDay(date: d.date, clockIn: d.clockIn, clockOut: d.clockOut, lunch: d.lunch, miles: d.miles,
+                      start: start, stops: stops, end: end, tag: ldTag, zone: zone, newID: newID)
+}
+
+/// Rebuilds the LD day answers from entries it created earlier, so the day can be edited.
+public func readLdDay(_ entries: [Entry], zone: TimeZone) -> LdDay? {
+    let es = entries.sorted { $0.start < $1.start }
+    guard let first = es.first, let lastEntry = es.last, first.note.contains(ldTag), !es.contains(where: { $0.end == nil }) else { return nil }
+    let city = { (s: String) in s.replacingOccurrences(of: #", (WA|OR)$"#, with: "", options: .regularExpression) }
+    func place(_ label: String) -> LdPlace? {
+        if let office = Office.allCases.first(where: { $0.label == label }) { return LdPlace(at: .office, office: office) }
+        return label.hasPrefix(hotelPrefix) ? LdPlace(at: .hotel, hotel: city(String(label.dropFirst(hotelPrefix.count)))) : nil
+    }
+    guard var start = place(first.from), var end = place(lastEntry.from) else { return nil }
+    if start.at == .hotel && end.at == .office { start.office = end.office }
+    if end.at == .hotel && start.at == .office { end.office = start.office }
+    let drop = es.first { $0.status == .driving && $0.note == "To unload" }
+    let clock = Clock(zone: zone)
+    let lunch = es.filter { $0.status == .offDuty && $0.note == "Lunch break" }.reduce(0.0) { $0 + $1.end!.timeIntervalSince($1.start) / 60 }
+    var day = LdDay(date: clock.dayKey(first.start), start: start, unload: drop.map { city($0.to) }, end: end, clockIn: clock.hhmm(first.start), clockOut: clock.hhmm(lastEntry.end!), lunch: Int(lunch.rounded()))
+    let saved = round1(es.reduce(0) { $0 + ($1.status == .driving ? $1.miles ?? 0 : 0) })
+    if let plan = try? planLdDay(day, zone: zone, newID: { "" }) {
+        if abs(plan.miles - saved) > 0.15 { day.miles = saved }
+    } else {
+        day.miles = saved
+    }
+    return day
 }
 
 /// Rebuilds the Simple day answers from entries it created earlier, so the day can be edited.

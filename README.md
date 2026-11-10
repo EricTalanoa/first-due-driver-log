@@ -15,6 +15,7 @@ A driving and duty log for First Due Movers drivers: clock in and out, record dr
 
 - **Clock in, clock out, drive.** One card shows the day so far: worked time, miles, and when you clocked in. Start driving records the trip with GPS.
 - **Simple day.** Enter the office, each job's load and unload cities, clock times and lunch; the whole day is laid out with estimated drive times and miles (or your odometer miles). Saved days can be reopened with **Edit day**.
+- **LD day.** For long-distance days: start at the office or a hotel, add an unload if there was one, and end at a hotel or the office (office → hotel, office → unload → hotel, hotel → hotel, hotel → unload → office, hotel → office). It's laid out like a Simple day and can be reopened with **Edit day** too.
 - **Set status.** On duty, off duty (lunch) and sleeper berth, recorded as duty periods.
 - **Daily log.** Every period for a day with totals per status, editable entries, and **Clear day**.
 - **History.** Days grouped by month with monthly hours and miles; tap a day to open it.

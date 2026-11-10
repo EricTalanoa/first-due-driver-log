@@ -49,6 +49,44 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(try planSimpleDay(withMiles, zone: pacific).miles, 50)
     }
 
+    // MARK: LD day (matches planLdDay in lib/simple-day.ts)
+
+    func testLdOfficeToHotelSplitsDriveForLunch() throws {
+        let day = LdDay(date: "2025-03-04", start: LdPlace(at: .office, office: .preston), end: LdPlace(at: .hotel, hotel: "Spokane"))
+        let plan = try planLdDay(day, zone: pacific)
+        XCTAssertEqual(plan.miles, 262.5)
+        XCTAssertEqual(plan.route, ["Preston", "Hotel (Spokane)"])
+        XCTAssertEqual(plan.entries.map(\.status), [.onDuty, .driving, .offDuty, .driving, .onDuty])
+        XCTAssertEqual(plan.entries[1].miles, 130)
+        XCTAssertEqual(clock.hhmm(plan.entries[2].start), "11:45")
+        XCTAssertEqual(plan.entries.last!.from, "Hotel – Spokane, WA")
+        XCTAssertEqual(clock.hhmm(plan.entries.last!.end!), "17:00")
+        try validate(Log(entries: plan.entries), now: plan.entries.last!.end!)
+        XCTAssertEqual(readLdDay(plan.entries, zone: pacific), day)
+        XCTAssertNil(readSimpleDay(plan.entries, zone: pacific))
+    }
+
+    func testLdHotelUnloadOfficeAndReadBack() throws {
+        let day = LdDay(date: "2025-03-04", start: LdPlace(at: .hotel, office: .kent, hotel: "Spokane"), unload: "Yakima", end: LdPlace(at: .office, office: .kent))
+        let plan = try planLdDay(day, zone: pacific)
+        XCTAssertEqual(plan.miles, 326)
+        XCTAssertEqual(plan.entries.count, 7)
+        XCTAssertEqual(plan.route, ["Hotel (Spokane)", "Yakima", "Kent office"])
+        XCTAssertEqual(plan.entries.filter { $0.note == "Unloading" }.count, 2)
+        XCTAssertEqual(readLdDay(plan.entries, zone: pacific), day)
+    }
+
+    func testLdChecks() {
+        XCTAssertThrowsError(try planLdDay(LdDay(date: "2025-03-04", end: LdPlace(at: .office)), zone: pacific))
+        XCTAssertThrowsError(try planLdDay(LdDay(date: "2025-03-04", unload: " ", end: LdPlace(at: .hotel, hotel: "Spokane")), zone: pacific))
+        let unknown = LdDay(date: "2025-03-04", start: LdPlace(at: .hotel, hotel: "Boise, ID"), end: LdPlace(at: .hotel, hotel: "Spokane"), clockIn: "06:00", clockOut: "16:00", lunch: 0)
+        XCTAssertThrowsError(try planLdDay(unknown, zone: pacific))
+        var withMiles = unknown
+        withMiles.miles = 300
+        XCTAssertEqual(try planLdDay(withMiles, zone: pacific).entries.count, 3)
+        XCTAssertEqual(try readLdDay(planLdDay(withMiles, zone: pacific).entries, zone: pacific), withMiles)
+    }
+
     func testFindCity() {
         XCTAssertEqual(Cities.find("123 Main St, Kent, WA 98032")?.name, "Kent")
         XCTAssertEqual(Cities.find("issaq")?.name, "Issaquah")

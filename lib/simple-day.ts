@@ -59,27 +59,28 @@ export type SimpleDay = { date: string; office: Office; jobs: Job[]; clockIn: st
 export type Plan = { entries: Entry[]; miles: number; driveMin: number; unknown: string[]; route: string[] };
 
 const SIMPLE_TAG = 'Simple day entry';
+const LD_TAG = 'LD day entry';
 const jobTag = (n: number, total: number) => (total > 1 ? ` (job ${n})` : '');
 
+type Pt = { lat: number; lon: number };
+/** Where the day starts or ends: its log label, map point (null if the city is unknown) and notes. */
+type End = { name: string; text: string; point: Pt | null; pre: string; post: string; back: string; route: string };
+type Stop = { text: string; city: Pt & { name: string } | null; work: string; drive: string };
+type Day = { date: string; clockIn: string; clockOut: string; lunch: number; miles?: number | null };
+
 /**
- * Lays out a day: pre-trip, then for each job drive to load, load, drive to unload, unload;
- * drive back, post-trip. Lunch goes in whichever stop is nearest the middle of the shift.
+ * Lays out a day from start to end through the stops: pre-trip, then drive to and work at each stop,
+ * drive to the end, post-trip. Lunch goes in whichever stop is nearest the middle of the shift.
+ * With no stops (a long-distance drive) the drive fills the shift and lunch splits it in two.
  */
-export function planSimpleDay(d: SimpleDay, zone: string, newId: () => string = () => crypto.randomUUID()): Plan {
-  const office = offices[d.office];
-  const jobs = d.jobs.map(j => ({ load: j.load.trim(), unload: j.unload.trim() })).filter(j => j.load || j.unload);
-  if (!jobs.length || jobs.some(j => !j.load || !j.unload)) throw new Error(d.jobs.length > 1 ? 'Enter a load city and an unload city for each job.' : 'Enter both a load city and an unload city.');
-  const stops = jobs.flatMap((j, n) => [
-    { text: j.load, city: findCity(j.load), work: `Loading${jobTag(n + 1, jobs.length)}`, drive: `To load${jobTag(n + 1, jobs.length)}` },
-    { text: j.unload, city: findCity(j.unload), work: `Unloading${jobTag(n + 1, jobs.length)}`, drive: `To unload${jobTag(n + 1, jobs.length)}` },
-  ]);
-  const unknown = [...new Set(stops.filter(s => !s.city).map(s => s.text))];
+function layDay(d: Day, start: End, stops: Stop[], end: End, tag: string, zone: string, newId: () => string): Plan {
+  const unknown = [...new Set([...(start.point ? [] : [start.text]), ...stops.filter(s => !s.city).map(s => s.text), ...(end.point ? [] : [end.text])])];
   const t0 = epoch(`${d.date}T${d.clockIn}`, zone), t1 = epoch(`${d.date}T${d.clockOut}`, zone);
   if (t1 <= t0) throw new Error('Clock out must be after clock in.');
   const span = Math.round((t1 - t0) / 60000), lunch = Math.max(0, Math.round(d.lunch));
   if (lunch >= span) throw new Error('Lunch is longer than the whole shift.');
 
-  const points = [office, ...stops.map(s => s.city), office];
+  const points = [start.point, ...stops.map(s => s.city), end.point];
   let legs: number[];
   if (!unknown.length) legs = points.slice(1).map((p, i) => roadMiles(points[i]!, p!));
   else if (d.miles && d.miles > 0) legs = points.slice(1).map(() => d.miles! / (points.length - 1));
@@ -94,7 +95,8 @@ export function planSimpleDay(d: SimpleDay, zone: string, newId: () => string = 
   const room = span - lunch - pre - post - stops.length * minSite;
   if (room <= 0) throw new Error('That shift is too short to fit the drives and stops. Use Advanced for this day.');
   const driveTotal = drive.reduce((a, b) => a + b, 0);
-  if (driveTotal > room) drive = drive.map(m => Math.max(4, Math.floor((m * room) / driveTotal)));
+  if (!stops.length) drive = [room];
+  else if (driveTotal > room) drive = drive.map(m => Math.max(4, Math.floor((m * room) / driveTotal)));
   const site = span - lunch - pre - post - drive.reduce((a, b) => a + b, 0);
   const atStop = stops.map((_, i) => Math.floor(site / stops.length) + (i >= stops.length - (site % stops.length) ? 1 : 0));
 
@@ -108,7 +110,7 @@ export function planSimpleDay(d: SimpleDay, zone: string, newId: () => string = 
     m += atStop[i];
   }
 
-  const names = [office.label, ...stops.map(s => (s.city ? place(s.city) : s.text))];
+  const names = [start.name, ...stops.map(s => (s.city ? place(s.city) : s.text)), end.name];
   const entries: Entry[] = [];
   let t = t0;
   const add = (status: Entry['status'], min: number, from: string, to = '', miles: number | null = null, note = '') => {
@@ -117,7 +119,7 @@ export function planSimpleDay(d: SimpleDay, zone: string, newId: () => string = 
     entries.push({ id: newId(), status, start: t, end, from, to, miles, note, partial: false, source: 'manual' });
     t = end;
   };
-  add('On duty', pre, names[0], '', null, 'Pre-trip inspection / prep at office');
+  add('On duty', pre, names[0], '', null, start.pre);
   stops.forEach((s, i) => {
     add('Driving', drive[i], names[i], names[i + 1], legs[i], s.drive);
     if (lunch && lunchAt.stop === i) {
@@ -126,11 +128,85 @@ export function planSimpleDay(d: SimpleDay, zone: string, newId: () => string = 
       add('On duty', atStop[i] - lunchAt.after, names[i + 1], '', null, s.work);
     } else add('On duty', atStop[i], names[i + 1], '', null, s.work);
   });
-  add('Driving', drive[stops.length], names[stops.length], names[0], legs[stops.length], 'Return to office');
-  add('On duty', Math.round((t1 - t) / 60000), names[0], '', null, 'Post-trip / unload equipment at office');
-  entries[0].note += ` | ${SIMPLE_TAG}: drive times and miles estimated from cities.`;
-  const route = [d.office, ...stops.map(s => (s.city ? s.city.name : s.text)), 'back'];
+  const last = names[stops.length];
+  if (!stops.length && lunch) {
+    // Straight through: stop for lunch on the road halfway through the working time.
+    const first = Math.min(drive[0], Math.max(1, target - pre)), firstMiles = Math.round((legs[0] * first) / drive[0] * 10) / 10;
+    add('Driving', first, last, 'En route', firstMiles, end.back);
+    add('Off duty', lunch, 'En route', '', null, 'Lunch break');
+    add('Driving', drive[0] - first, 'En route', end.name, Math.round((legs[0] - firstMiles) * 10) / 10, end.back);
+  } else add('Driving', drive[stops.length], last, end.name, legs[stops.length], end.back);
+  add('On duty', Math.round((t1 - t) / 60000), end.name, '', null, end.post);
+  entries[0].note += ` | ${tag}: drive times and miles estimated from cities.`;
+  const route = [start.route, ...stops.map(s => (s.city ? s.city.name : s.text)), end.route];
   return { entries, miles: Math.round(legs.reduce((a, b) => a + b, 0) * 10) / 10, driveMin: drive.reduce((a, b) => a + b, 0), unknown, route };
+}
+
+const officeEnd = (o: Office, back = 'Return to office', route = 'back'): End => ({ name: offices[o].label, text: o, point: offices[o], pre: 'Pre-trip inspection / prep at office', post: 'Post-trip / unload equipment at office', back, route });
+
+/**
+ * Lays out a day: pre-trip, then for each job drive to load, load, drive to unload, unload;
+ * drive back, post-trip. Lunch goes in whichever stop is nearest the middle of the shift.
+ */
+export function planSimpleDay(d: SimpleDay, zone: string, newId: () => string = () => crypto.randomUUID()): Plan {
+  const jobs = d.jobs.map(j => ({ load: j.load.trim(), unload: j.unload.trim() })).filter(j => j.load || j.unload);
+  if (!jobs.length || jobs.some(j => !j.load || !j.unload)) throw new Error(d.jobs.length > 1 ? 'Enter a load city and an unload city for each job.' : 'Enter both a load city and an unload city.');
+  const stops = jobs.flatMap((j, n) => [
+    { text: j.load, city: findCity(j.load), work: `Loading${jobTag(n + 1, jobs.length)}`, drive: `To load${jobTag(n + 1, jobs.length)}` },
+    { text: j.unload, city: findCity(j.unload), work: `Unloading${jobTag(n + 1, jobs.length)}`, drive: `To unload${jobTag(n + 1, jobs.length)}` },
+  ]);
+  return layDay(d, { ...officeEnd(d.office), route: d.office }, stops, officeEnd(d.office), SIMPLE_TAG, zone, newId);
+}
+
+// ---- LD (long-distance) day: starts and/or ends at a hotel, with an optional unload on the way ----
+
+export type LdPlace = { at: 'office' | 'hotel'; office: Office; hotel: string };
+/** `unload` is null when there is no unload today. */
+export type LdDay = { date: string; start: LdPlace; unload: string | null; end: LdPlace; clockIn: string; clockOut: string; lunch: number; miles?: number | null };
+
+const HOTEL = 'Hotel – ';
+function hotelEnd(text: string): End {
+  const city = findCity(text);
+  return { name: HOTEL + (city ? place(city) : text), text, point: city, pre: 'Pre-trip inspection at hotel', post: 'Post-trip inspection at hotel', back: 'To hotel', route: `Hotel (${city ? city.name : text})` };
+}
+
+/**
+ * Lays out a long-distance day: pre-trip at the office or hotel, an optional drive to the unload and
+ * unloading, then the drive to the hotel or back to the office and a post-trip there.
+ * Covers office → hotel, office → unload → hotel, hotel → hotel, hotel → unload → hotel/office, hotel → office.
+ */
+export function planLdDay(d: LdDay, zone: string, newId: () => string = () => crypto.randomUUID()): Plan {
+  const startHotel = d.start.hotel.trim(), endHotel = d.end.hotel.trim(), unload = d.unload?.trim() ?? null;
+  if (d.start.at === 'hotel' && !startHotel) throw new Error('Enter the city of the hotel you started from.');
+  if (d.end.at === 'hotel' && !endHotel) throw new Error('Enter the city of the hotel you ended at.');
+  if (unload === '') throw new Error('Enter the unload city, or choose No unload.');
+  if (d.start.at === 'office' && d.end.at === 'office') throw new Error('Office to office is a Simple day. Pick a hotel for the start or end, or use Simple day.');
+  const start = d.start.at === 'office' ? { ...officeEnd(d.start.office), route: d.start.office } : hotelEnd(startHotel);
+  const end = d.end.at === 'office' ? officeEnd(d.end.office, 'Return to office', `${d.end.office} office`) : hotelEnd(endHotel);
+  const stops: Stop[] = unload ? [{ text: unload, city: findCity(unload), work: 'Unloading', drive: 'To unload' }] : [];
+  return layDay(d, start, stops, end, LD_TAG, zone, newId);
+}
+
+/** Rebuilds the LD day answers from entries it created earlier, so the day can be edited. */
+export function readLdDay(entries: Entry[], zone: string): LdDay | null {
+  const es = [...entries].sort((a, b) => a.start - b.start);
+  if (!es.length || !es[0].note.includes(LD_TAG) || es.some(e => e.end === null)) return null;
+  const city = (s: string) => s.replace(/, (WA|OR)$/, '');
+  const where = (label: string): LdPlace | null => {
+    const office = (Object.keys(offices) as Office[]).find(o => offices[o].label === label);
+    if (office) return { at: 'office', office, hotel: '' };
+    return label.startsWith(HOTEL) ? { at: 'hotel', office: 'Preston', hotel: city(label.slice(HOTEL.length)) } : null;
+  };
+  const start = where(es[0].from), end = where(es[es.length - 1].from);
+  if (!start || !end) return null;
+  if (start.at === 'hotel' && end.at === 'office') start.office = end.office;
+  if (end.at === 'hotel' && start.at === 'office') end.office = start.office;
+  const drop = es.find(e => e.status === 'Driving' && e.note === 'To unload');
+  const lunch = es.filter(e => e.status === 'Off duty' && e.note === 'Lunch break').reduce((n, e) => n + (e.end! - e.start) / 60000, 0);
+  const day: LdDay = { date: dayKey(es[0].start, zone), start, unload: drop ? city(drop.to) : null, end, clockIn: localInput(es[0].start, zone).slice(11), clockOut: localInput(es[es.length - 1].end!, zone).slice(11), lunch: Math.round(lunch), miles: null };
+  const saved = Math.round(es.reduce((n, e) => n + (e.status === 'Driving' ? e.miles ?? 0 : 0), 0) * 10) / 10;
+  try { if (Math.abs(planLdDay(day, zone, () => '').miles - saved) > 0.15) day.miles = saved; } catch { day.miles = saved; }
+  return day;
 }
 
 /** Rebuilds the Simple day answers from entries it created earlier, so the day can be edited. */
