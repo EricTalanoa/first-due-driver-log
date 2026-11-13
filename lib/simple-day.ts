@@ -54,7 +54,8 @@ export function nearestCity(p: { lat: number; lon: number }, maxMiles = 8) {
   return best;
 }
 
-export type Job = { load: string; unload: string };
+/** `one` marks a 1-location job (labor only or load only): just `load` is used, as the job's one stop. */
+export type Job = { load: string; unload: string; one?: boolean };
 export type SimpleDay = { date: string; office: Office; jobs: Job[]; clockIn: string; clockOut: string; lunch: number; miles?: number | null };
 export type Plan = { entries: Entry[]; miles: number; driveMin: number; unknown: string[]; route: string[] };
 
@@ -93,7 +94,7 @@ function layDay(d: Day, start: End, stops: Stop[], end: End, tag: string, zone: 
   const pre = 15, post = 10, minSite = 20;
   let drive = legs.map(driveMinutes);
   const room = span - lunch - pre - post - stops.length * minSite;
-  if (room <= 0) throw new Error('That shift is too short to fit the drives and stops. Use Advanced for this day.');
+  if (room <= 0) throw new Error('That shift is too short to fit the drives and stops. Check the clock times.');
   const driveTotal = drive.reduce((a, b) => a + b, 0);
   if (!stops.length) drive = [room];
   else if (driveTotal > room) drive = drive.map(m => Math.max(4, Math.floor((m * room) / driveTotal)));
@@ -149,9 +150,11 @@ const officeEnd = (o: Office, back = 'Return to office', route = 'back'): End =>
  * drive back, post-trip. Lunch goes in whichever stop is nearest the middle of the shift.
  */
 export function planSimpleDay(d: SimpleDay, zone: string, newId: () => string = () => crypto.randomUUID()): Plan {
-  const jobs = d.jobs.map(j => ({ load: j.load.trim(), unload: j.unload.trim() })).filter(j => j.load || j.unload);
-  if (!jobs.length || jobs.some(j => !j.load || !j.unload)) throw new Error(d.jobs.length > 1 ? 'Enter a load city and an unload city for each job.' : 'Enter both a load city and an unload city.');
-  const stops = jobs.flatMap((j, n) => [
+  const jobs = d.jobs.map(j => ({ load: j.load.trim(), unload: j.one ? '' : j.unload.trim(), one: !!j.one })).filter(j => j.load || j.unload);
+  if (!jobs.length || jobs.some(j => !j.load || (!j.one && !j.unload))) throw new Error(d.jobs.length > 1 ? 'Enter the cities for each job.' : 'Enter both a load city and an unload city.');
+  const stops = jobs.flatMap((j, n) => j.one ? [
+    { text: j.load, city: findCity(j.load), work: `On site${jobTag(n + 1, jobs.length)}`, drive: `To location${jobTag(n + 1, jobs.length)}` },
+  ] : [
     { text: j.load, city: findCity(j.load), work: `Loading${jobTag(n + 1, jobs.length)}`, drive: `To load${jobTag(n + 1, jobs.length)}` },
     { text: j.unload, city: findCity(j.unload), work: `Unloading${jobTag(n + 1, jobs.length)}`, drive: `To unload${jobTag(n + 1, jobs.length)}` },
   ]);
@@ -180,7 +183,7 @@ export function planLdDay(d: LdDay, zone: string, newId: () => string = () => cr
   if (d.start.at === 'hotel' && !startHotel) throw new Error('Enter the city of the hotel you started from.');
   if (d.end.at === 'hotel' && !endHotel) throw new Error('Enter the city of the hotel you ended at.');
   if (unload === '') throw new Error('Enter the unload city, or choose No unload.');
-  if (d.start.at === 'office' && d.end.at === 'office') throw new Error('Office to office is a Simple day. Pick a hotel for the start or end, or use Simple day.');
+  if (d.start.at === 'office' && d.end.at === 'office') throw new Error('Office to office is a regular day. Pick a hotel for the start or end, or use Entry.');
   const start = d.start.at === 'office' ? { ...officeEnd(d.start.office), route: d.start.office } : hotelEnd(startHotel);
   const end = d.end.at === 'office' ? officeEnd(d.end.office, 'Return to office', `${d.end.office} office`) : hotelEnd(endHotel);
   const stops: Stop[] = unload ? [{ text: unload, city: findCity(unload), work: 'Unloading', drive: 'To unload' }] : [];
@@ -221,8 +224,9 @@ export function readSimpleDay(entries: Entry[], zone: string): SimpleDay | null 
     if (e.status !== 'Driving') continue;
     if (e.note.startsWith('To load')) jobs.push({ load: city(e.to), unload: '' });
     else if (e.note.startsWith('To unload') && jobs.length) jobs[jobs.length - 1].unload = city(e.to);
+    else if (e.note.startsWith('To location')) jobs.push({ load: city(e.to), unload: '', one: true });
   }
-  if (!jobs.length || jobs.some(j => !j.unload)) return null;
+  if (!jobs.length || jobs.some(j => !j.one && !j.unload)) return null;
   const lunch = es.filter(e => e.status === 'Off duty' && e.note === 'Lunch break').reduce((n, e) => n + (e.end! - e.start) / 60000, 0);
   const day: SimpleDay = { date: dayKey(es[0].start, zone), office, jobs, clockIn: localInput(es[0].start, zone).slice(11), clockOut: localInput(es[es.length - 1].end!, zone).slice(11), lunch: Math.round(lunch), miles: null };
   // If the saved miles differ from the city estimate, the driver typed odometer miles; keep them.

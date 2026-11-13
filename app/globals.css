@@ -56,3 +56,4 @@ button{display:inline-flex;align-items:center;justify-content:center;gap:10px}bu
 .sign-in .or{display:flex;align-items:center;gap:10px;margin:16px 0;color:#9aa3ad;font-size:13px}
 .sign-in .or::before,.sign-in .or::after{content:'';flex:1;height:1px;background:#3a414b}
 .sign-in .google{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:52px;border:0;border-radius:10px;background:#fff;color:#20252b;font-size:16px;font-weight:700}
+.job-adds{display:flex;flex-wrap:wrap;gap:4px 22px}
