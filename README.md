@@ -1,6 +1,6 @@
 # First Due Driver’s Log
 
-A driving and duty log for First Due Movers drivers: clock in and out, record drives with GPS miles, fill in a whole work day in a few taps, and keep every day's record on the web and on iPhone.
+A driving and duty log for First Due Movers drivers. It keeps a DOT-style duty chart (record of duty status) for every day: estimated from a few answers on local days, and filled in stop by stop on long-distance (LD) days. Every day's record is kept on the web and on iPhone.
 
 **Live site:** https://first-due-driver-log-eric.netlify.app
 **Status:** website in daily use · iPhone app in testing ([#13](https://github.com/EricTalanoa/first-due-driver-log/pull/13)) · App Store next
@@ -13,16 +13,20 @@ A driving and duty log for First Due Movers drivers: clock in and out, record dr
 
 ## What it does
 
-- **Clock in, clock out, drive.** One card shows the day so far: worked time, miles, and when you clocked in. Start driving records the trip with GPS.
-- **Simple day.** Enter the office, each job's load and unload cities, clock times and lunch; the whole day is laid out with estimated drive times and miles (or your odometer miles). Saved days can be reopened with **Edit day**.
-- **LD day.** For long-distance days: start at the office or a hotel, add an unload if there was one, and end at a hotel or the office (office → hotel, office → unload → hotel, hotel → hotel, hotel → unload → office, hotel → office). It's laid out like a Simple day and can be reopened with **Edit day** too.
-- **Set status.** On duty, off duty (lunch) and sleeper berth, recorded as duty periods.
-- **Daily log.** Every period for a day with totals per status, editable entries, and **Clear day**.
+The website has three tabs: **Today**, **LD** and **History**.
+
+- **Today.** *Add entry* at the top, then the day's DOT chart: 24 hours across the four duty lines (off duty, sleeper berth, driving, on duty), 15-minute ticks, totals for each line, and remarks with the time and place of every change. Time with no entry counts as off duty, so a finished day adds up to 24:00. Tap a stretch of the chart to edit that entry.
+- **Simple day** (local jobs). Enter load and unload cities, clock times and lunch; the day is laid out with estimated drive times and miles. Under the short-haul exception this time record is what the rules ask for on local days. Saved days reopen with **Edit day**.
+- **LD.** The live long-distance log. One set of buttons shows what can come next (Clock in → Start driving → Fuel stop, Quick break, Lunch, Start unload, Switch drivers, Arrive · post-trip, Clock out). Each tap asks for the time (now by default) and the place; clock-in suggests the hotel from where the last day ended. Fueling is logged as on duty, as the rules require. Ending a drive estimates its miles from the two places.
+- **Hours-of-service clocks** on the LD tab: driving left of 11 hours, work window left of 14, time until the 30-minute break is due, and hours left of 70 in 8 days.
+- **Inspection view.** Today and the previous 7 days with the driver, carrier, truck and terminal details, ready to show or print.
+- **Fill in or fix a day.** The same steps as a list (time, activity, place, miles) for filling in an LD day after the fact or fixing any finished day. A time earlier than the step before it is read as after midnight; the chart splits the day at midnight.
+- **Estimate an LD day.** The quick estimate from start, unload and end places, as before.
 - **History.** Days grouped by month with monthly hours and miles; tap a day to open it.
 - **Your data.** CSV export of every entry, JSON backup and import, print or PDF of a day.
 - **Accounts.** Sign in with email or Google; each driver sees only their own log, on every device.
 
-GPS miles are an estimate from the phone's location, not road routing; confirm with the odometer. This is a personal logbook, not a certified ELD.
+Miles are estimates: each place is matched to a city in the app's list, and the straight-line distance is scaled for roads (usually within about 10% on highway trips). A place outside the list asks for miles. The Kent office closed, so new days start at Preston; older Kent days still open. GPS tracking is shelved on the website (it is in the git history before this change). This is a personal logbook, not a certified ELD: drivers who keep logs on more than 8 days in any 30 generally need an ELD.
 
 ## How it's built
 
@@ -41,11 +45,11 @@ Both the website and the app read and write the same Supabase tables:
 
 The publishable Supabase key is in `lib/supabase.ts` and `ios/Sources/DriverLog/Backend.swift`. It's safe to ship because row-level security limits every query to the signed-in driver.
 
-### GPS
+### Duty chart and hours of service
 
-- **Website:** keeps the screen awake while driving, ignores GPS wobble and impossible jumps, and bridges gaps (phone locked, signal lost) with a straight-line estimate. Gaps over five minutes are flagged to check.
-- **iPhone app:** keeps recording with the phone locked, using "While Using" location and a background location session.
-- Both use the same trip rules: `ios/Sources/DriverLogCore/TripMeter.swift` mirrors the website's.
+`lib/hos.ts` holds what each LD step means, the timeline ↔ entries conversion, the filled-in chart line and the hours-of-service clocks. `app/hos-chart.tsx` draws the chart; `app/ld-page.tsx` is the LD tab, the inspection view and the fill-in editor.
+
+The iPhone app still has the earlier Log screen and GPS. It reads the same entries, so LD days logged on the web show up there.
 
 ## Working on it
 
