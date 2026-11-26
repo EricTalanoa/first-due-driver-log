@@ -32,6 +32,8 @@ Every pull request runs these automatically on GitHub. Nothing in them touches t
 |---|---|---|---|
 | 1 | Medium | **A shift past midnight was split when editing.** Edit day only showed up to midnight; the next day showed the post-trip alone as a "Clock in". | Edit day works on the whole shift, carried past midnight while the work continues; opening the next day goes to the shift it belongs to. |
 | 2 | Medium | **Phone and website at the same time.** A page that hadn't seen the other device's change got "Duty periods cannot overlap", which made no sense, and stayed stale. | The app recognizes this, refreshes from the server and says the log changed on another device. |
+| 4 | High | **iPhone app crashed on Clear day** (found by the simulator tests). While what you're recording was removed, the Today list could redraw its old row once and force-read an end time it didn't have. The same could happen on any LD step. | Rows treat an entry with no end as "now" instead of assuming one. |
+| 5 | Medium | **iPhone Clock in didn't preselect a place**, so Save asked "Enter where you are" although Preston office was listed. | The first real suggestion is preselected, as on the website. |
 | 3 | Low | **The website didn't refresh when you came back to it.** Changes made on the phone only showed after a manual reload. | The website reloads when the tab or app comes back into view (the iPhone app already did). |
 
 Fixed earlier, now covered by tests: a step time just past now read as yesterday ("before your driving started"), Clear day leaving a drive in progress, the LD page showing an old trip.

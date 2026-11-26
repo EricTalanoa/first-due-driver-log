@@ -374,7 +374,7 @@ struct StepSheet: View {
             // Where yesterday ended, if it was a hotel or somewhere other than the office.
             let before = t0
             let prev = model.log.entries.filter { e in e.end.map { $0 <= before && $0 > before.addingTimeInterval(-86_400) } ?? false }
-                .max { $0.end! < $1.end! }
+                .max { ($0.end ?? $0.start) < ($1.end ?? $1.start) }
             let last = prev.map { $0.to.isEmpty ? $0.from : $0.to } ?? ""
             return [last == Places.preston ? "" : last, Places.preston]
         }

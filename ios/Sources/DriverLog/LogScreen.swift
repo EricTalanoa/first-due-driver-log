@@ -212,7 +212,9 @@ struct EntryCard: View {
 
     var body: some View {
         let clock = model.clock
-        let isActive = entry.id == model.active?.id
+        // An entry with no end is still being recorded. Don't rely on model.active alone: while a step or Clear day
+        // replaces it, this row can redraw once with the old copy, and force-reading its end time crashed the app.
+        let isActive = entry.id == model.active?.id || entry.end == nil
         let (start, end) = clock.bounds(day)
         HStack(alignment: .top, spacing: 12) {
             RoundedRectangle(cornerRadius: 2).fill(Brand.color(for: entry.status)).frame(width: 4)
@@ -223,7 +225,7 @@ struct EntryCard: View {
                     Text(isActive ? "Recording now" : duration(min(entry.end ?? model.now, end).timeIntervalSince(max(entry.start, start))))
                         .font(.footnote).foregroundStyle(Brand.muted)
                 }
-                Text("\(clock.time(entry.start)) – \(isActive ? "now" : clock.time(entry.end!))\(entry.start < start || (entry.end ?? model.now) > end ? " · spans days" : "")")
+                Text("\(clock.time(entry.start)) – \(entry.end.map { clock.time($0) } ?? "now")\(entry.start < start || (entry.end ?? model.now) > end ? " · spans days" : "")")
                     .font(.subheadline).foregroundStyle(Brand.muted)
                 if !entry.from.isEmpty || !entry.to.isEmpty {
                     Label(entry.status == .driving || !entry.to.isEmpty ? "\(entry.from.isEmpty ? "Start not entered" : entry.from) → \(entry.to.isEmpty ? "Destination not entered" : entry.to)" : entry.from,
