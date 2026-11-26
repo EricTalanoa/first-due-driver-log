@@ -8,6 +8,7 @@ final class DriverLogUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-demo", demo] + (screen.map { ["-screen", $0] } ?? [])
         app.launch()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 60), "the app started")
         return app
     }
 

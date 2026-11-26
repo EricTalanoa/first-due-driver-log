@@ -8,6 +8,9 @@ import json,sys
 d=json.load(sys.stdin)["devices"]
 c=[x for k,v in d.items() if "iOS" in k for x in v if x["name"].startswith("iPhone") and "Pro Max" not in x["name"] and "Plus" not in x["name"]]
 print(sorted(c,key=lambda x:x["name"])[-1]["udid"])')
+# Boot the simulator and wait until it is fully up: the first test otherwise races a cold boot and the app isn't running yet.
+xcrun simctl boot "$UDID" 2>/dev/null || true
+xcrun simctl bootstatus "$UDID" -b
 START=$(date +%s)
 xcodebuild test -project DriverLogHost.xcodeproj -scheme DriverLogHost -sdk iphonesimulator \
   -destination "id=$UDID" -derivedDataPath ../../dd-tests -skipPackagePluginValidation -skipMacroValidation \
