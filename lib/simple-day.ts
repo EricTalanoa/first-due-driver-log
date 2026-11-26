@@ -29,7 +29,7 @@ export function findCity(input: string) {
   return whole.length >= 3 && hit.length === 1 ? cities[hit[0]] : null;
 }
 
-function straightMiles(a: { lat: number; lon: number }, b: { lat: number; lon: number }) {
+export function straightMiles(a: { lat: number; lon: number }, b: { lat: number; lon: number }) {
   const r = Math.PI / 180, dl = (b.lat - a.lat) * r, dn = (b.lon - a.lon) * r;
   const h = Math.sin(dl / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dn / 2) ** 2;
   return 3958.76 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));

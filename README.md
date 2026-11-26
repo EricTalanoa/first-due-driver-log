@@ -17,12 +17,12 @@ The website has three tabs: **Today**, **LD** and **History**.
 
 - **Today.** *Add entry* at the top, then the day's DOT chart: 24 hours across the four duty lines (off duty, sleeper berth, driving, on duty), 15-minute ticks, totals for each line, and remarks with the time and place of every change. Time with no entry counts as off duty, so a finished day adds up to 24:00. Tap a stretch of the chart to edit that entry.
 - **Simple day** (local jobs). Enter load and unload cities, clock times and lunch; the day is laid out with estimated drive times and miles. Under the short-haul exception this time record is what the rules ask for on local days. Saved days reopen with **Edit day**.
-- **LD.** The live long-distance log. One set of buttons shows what can come next (Clock in → Start driving → Fuel stop, Quick break, Lunch, Start unload, Switch drivers, Arrive · post-trip, Clock out). Each tap asks for the time (now by default) and the place; clock-in suggests the hotel from where the last day ended. Fueling is logged as on duty, as the rules require. Ending a drive estimates its miles from the two places.
+- **LD.** The live long-distance log. One set of buttons shows what can come next (Clock in → Start driving → Fuel stop, Quick break, Lunch, Start unload, Switch drivers, Arrive · post-trip, Clock out). Each tap asks for the time (now by default) and the place; clock-in suggests the hotel if yesterday ended at one. The page starts empty each day; the clocks appear once you clock in. Fueling is logged as on duty, as the rules require. Ending a drive estimates its miles from the two places.
 - **Hours-of-service clocks** on the LD tab: driving left of 11 hours, work window left of 14, time until the 30-minute break is due, and hours left of 70 in 8 days.
 - **Inspection view.** Today and the previous 7 days with the driver, carrier, truck and terminal details, ready to show or print.
 - **Fill in or fix a day.** The same steps as a list (time, activity, place, miles) for filling in an LD day after the fact or fixing any finished day. A time earlier than the step before it is read as after midnight; the chart splits the day at midnight.
 - **Estimate an LD day.** The quick estimate from start, unload and end places, as before.
-- **History.** Days grouped by month with monthly hours and miles; tap a day to open it.
+- **History.** Days grouped by month with monthly hours and miles; tap a day to open it. Long-distance days are outlined in red, and back-to-back LD days are grouped as one trip. A day counts as LD if it was logged on the LD tab or with the LD estimate, has a hotel stop, or reaches a place more than 150 air-miles from Preston.
 - **Your data.** CSV export of every entry, JSON backup and import, print or PDF of a day.
 - **Accounts.** Sign in with email or Google; each driver sees only their own log, on every device.
 
