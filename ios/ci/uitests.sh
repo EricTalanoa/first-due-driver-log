@@ -24,7 +24,8 @@ xcodebuild test-without-building "${OPTS[@]}" -resultBundlePath ../../ui-tests.x
   | grep -E "Test Case|error:|XCTAssert|Executed|TEST (SUCCEEDED|FAILED)|TEST EXECUTE"
 STATUS=${PIPESTATUS[0]}
 # If the app crashed, print the top of its crash report (exception and the crashing thread's frames).
-for f in $(find ~/Library/Logs/DiagnosticReports -name 'DriverLogHost*' -newermt "@$START" 2>/dev/null | head -2); do
+echo "Recent crash reports:"; ls -t ~/Library/Logs/DiagnosticReports 2>/dev/null | head -5
+for f in $(find ~/Library/Logs/DiagnosticReports -name 'DriverLogHost*' -mmin -60 2>/dev/null | head -2); do
   echo "::error::Crash report: $f"
   python3 - "$f" <<'PY'
 import json, sys
