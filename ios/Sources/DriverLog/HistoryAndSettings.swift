@@ -9,7 +9,6 @@ struct HistoryScreen: View {
 
     var body: some View {
         let months = history(model.log, now: model.now)
-        let clock = model.clock
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
@@ -34,8 +33,55 @@ struct HistoryScreen: View {
                             Text("\(duration(m.worked)) · \(milesText(m.miles)) mi").font(.caption.weight(.bold)).monospacedDigit().foregroundStyle(Brand.ink)
                         }
                         .padding(.top, 14)
-                        ForEach(m.days) { d in
-                            Button { open(d.day) } label: {
+                        ForEach(groupTrips(m.days)) { g in
+                            if g.ld {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    HStack(spacing: 8) {
+                                        Text("LD").font(.caption.weight(.heavy)).tracking(1).foregroundStyle(.white)
+                                            .padding(.horizontal, 7).padding(.vertical, 3).background(Brand.red, in: RoundedRectangle(cornerRadius: 5))
+                                        Text(tripDates(g)).font(.subheadline.weight(.bold))
+                                        Spacer()
+                                        Text("\(g.days.count) \(g.days.count == 1 ? "day" : "days") · \(milesText(g.miles)) mi").font(.subheadline).monospacedDigit()
+                                    }
+                                    .foregroundStyle(Brand.darkRed)
+                                    ForEach(g.days) { d in dayRow(d) }
+                                }
+                                .padding(10)
+                                .background(Color(red: 0.99, green: 0.95, blue: 0.95), in: RoundedRectangle(cornerRadius: 14))
+                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Brand.red, lineWidth: 2))
+                            } else {
+                                ForEach(g.days) { d in dayRow(d) }
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+            }
+            .background(Brand.page.ignoresSafeArea())
+            .refreshable { await model.refresh() }
+            .toolbar(.hidden, for: .navigationBar)
+        }
+        .confirmationDialog("Add to your log", isPresented: $choosing, titleVisibility: .visible) {
+            Button("Simple day") { sheet = .simple }
+            Button("Fill in a day step by step") { sheet = .timeline(model.today, ld: false) }
+            Button("Advanced entry") {
+                let end = Date()
+                sheet = .edit(Entry(status: .driving, start: end.addingTimeInterval(-3600), end: end))
+            }
+        }
+        .sheet(item: $sheet) { $0.view(model) }
+    }
+
+    /// "Nov 20 – 21", or "Nov 30 – Dec 1" across months.
+    private func tripDates(_ g: DayGroup) -> String {
+        let first = g.days[g.days.count - 1].day, last = g.days[0].day
+        if first == last { return Clock.label(first, "MMM d") }
+        return "\(Clock.label(first, "MMM d")) – \(Clock.label(last, first.prefix(7) == last.prefix(7) ? "d" : "MMM d"))"
+    }
+
+    private func dayRow(_ d: DaySummary) -> some View {
+        let clock = model.clock
+        return Button { open(d.day) } label: {
                                 VStack(alignment: .leading, spacing: 6) {
                                     HStack(alignment: .firstTextBaseline) {
                                         Text(Clock.label(d.day, "EEE, MMM d")).font(.headline)
@@ -55,36 +101,11 @@ struct HistoryScreen: View {
                                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Brand.paperLine))
                             }
                             .buttonStyle(.plain)
-                        }
-                    }
-                }
-                .padding(16)
-            }
-            .background(Brand.page.ignoresSafeArea())
-            .refreshable { await model.refresh() }
-            .toolbar(.hidden, for: .navigationBar)
-        }
-        .confirmationDialog("Add to your log", isPresented: $choosing, titleVisibility: .visible) {
-            Button("Simple day") { sheet = .simple }
-            Button("Advanced entry") {
-                let end = Date()
-                sheet = .edit(Entry(status: .driving, start: end.addingTimeInterval(-3600), end: end))
-            }
-            Button("LD day") { sheet = .ld }
-        }
-        .sheet(item: $sheet) { s in
-            switch s {
-            case .simple: SimpleDayEditor(day: model.today)
-            case .ld: LdDayEditor(day: model.today)
-            case .edit(let e): EntryEditor(entry: e)
-            case .settings: SettingsView()
-            }
-        }
     }
 
     private func open(_ day: String) {
         model.day = day
-        model.tab = .log
+        model.tab = .today
     }
 }
 
@@ -122,7 +143,7 @@ struct SettingsView: View {
                     Button("Delete account", role: .destructive) { confirmDelete = true }
                 }
                 Section {
-                    Text("GPS mileage is an estimate from your phone's location and does not use road routing. Confirm miles with the odometer. This personal logbook is not a certified ELD.")
+                    Text("Miles are estimated from the places you enter, not road routing. Confirm with the odometer when it matters. This personal logbook is not a certified ELD.")
                         .font(.footnote).foregroundStyle(Brand.muted)
                 }
             }

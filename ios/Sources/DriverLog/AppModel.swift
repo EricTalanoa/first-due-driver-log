@@ -1,6 +1,4 @@
 #if os(iOS)
-import Combine
-import CoreLocation
 import DriverLogCore
 import Foundation
 import SwiftUI
@@ -10,10 +8,10 @@ import SwiftUI
 @MainActor
 final class AppModel: ObservableObject {
     enum Phase { case checking, signedOut, signedIn }
-    enum Tab: Hashable { case log, history }
+    enum Tab: Hashable { case today, ld, history }
 
     @Published var phase: Phase = .checking
-    @Published var tab: Tab = .log
+    @Published var tab: Tab = .today
     @Published private(set) var log = Log()
     @Published private(set) var loaded = false
     @Published private(set) var busy = false
@@ -21,21 +19,13 @@ final class AppModel: ObservableObject {
     @Published var toast: String?
     @Published var day = ""
     @Published private(set) var now = Date()
-    @Published private(set) var meter: TripMeter?
     @Published var canUseGoogle = false
 
     let backend: Backend
-    let tracker = LocationTracker()
     private var ticker: Timer?
-    private var trackerChanges: AnyCancellable?
-    private var lastFlush = Date.distantPast
-    private static let meterKey = "drive-meter"
 
     init(backend: Backend) {
         self.backend = backend
-        tracker.onFix = { [weak self] in self?.take($0) }
-        // The GPS line on screen reads the tracker's state, so pass its changes through.
-        trackerChanges = tracker.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
         ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.now = Date() }
         }
@@ -45,7 +35,6 @@ final class AppModel: ObservableObject {
     var today: String { clock.dayKey(now) }
     var active: Entry? { log.active }
     var driving: Bool { log.active?.status == .driving }
-    var onClock: Bool { log.active?.status == .onDuty || driving }
 
     // MARK: Session
 
@@ -72,7 +61,6 @@ final class AppModel: ObservableObject {
             log = next
             loaded = true
             if day.isEmpty { day = clock.dayKey(Date()) }
-            resumeDriveIfNeeded()
         } catch where isCancellation(error) {
             // A load cut off part-way (a redraw, the app going to the background) isn't a failure: try once more quietly.
             if retrying { await Task { await self.load(retrying: false) }.value }
@@ -82,7 +70,6 @@ final class AppModel: ObservableObject {
     }
 
     func signOut() async {
-        tracker.stop()
         await backend.signOut()
         log = Log()
         loaded = false
@@ -127,109 +114,34 @@ final class AppModel: ObservableObject {
         }
     }
 
-    // MARK: Duty status
+    // MARK: LD steps
 
-    /// The active entry with the latest GPS applied.
-    func liveActive(at time: Date = Date()) -> Entry? {
-        guard let a = log.active else { return nil }
-        if a.status == .driving, let m = meter, m.entryID == a.id { return m.apply(to: a, now: time) }
-        return a
-    }
-
-    /// Ends whatever is recording and starts `status`. Returns the drive that just ended, for review.
+    /// GPS tracking is shelved (it is in the git history before this change). Each LD step closes what the
+    /// driver was doing at `at` and starts the next activity. Returns the ended drive if it still needs miles.
     @discardableResult
-    func setStatus(_ status: Status) async -> Entry? {
-        guard loaded, !busy, log.active?.status != status else { return nil }
-        let at = Date()
-        if driving { await finalFix() }
-        let ended = liveActive(at: at).map { e -> Entry in var e = e; e.end = max(e.start.addingTimeInterval(1), at); return e }
+    func take(_ step: Step, at: Date, place: String, miles: Double?) async throws -> Entry? {
         var next = log
-        if let ended { next.entries.append(ended) }
-        next.active = Entry.starting(status, at: ended?.end ?? at)
-        do {
-            try await save(next, message: nil)
-            day = clock.dayKey(at)
-            afterActiveChanged()
-            return ended?.status == .driving ? ended : nil
-        } catch {
-            return nil
+        var ended: Entry?
+        if var a = log.active {
+            guard at > a.start else { throw LogError("That's before your current \(Activity.of(a).label.lowercased()) started. Check the time.") }
+            a.end = at
+            if a.status == .driving {
+                a.to = place
+                a.miles = miles ?? Places.estimateMiles(a.from, place) ?? a.miles
+                a.partial = false
+                a.source = .manual
+            }
+            next.entries.append(a)
+            ended = a
         }
-    }
-
-    /// Clock out: stop recording without starting anything new.
-    func clockOut() async {
-        guard loaded, !busy, log.active != nil, !driving else { return }
-        let at = Date()
-        var next = log
-        if var a = liveActive(at: at) { a.end = max(a.start.addingTimeInterval(1), at); next.entries.append(a) }
-        next.active = nil
-        try? await save(next, message: "Clocked out")
-        afterActiveChanged()
-    }
-
-    // MARK: GPS
-
-    var gpsMessage: String {
-        switch tracker.state {
-        case .denied: return "Location is off for Driver Log · turn it on in Settings, or enter miles after the drive"
-        case .unavailable: return "Location services are off · enter miles after the drive"
-        case .waiting: return meter?.anchor == nil ? "Finding your location…" : "Resuming GPS…"
-        case .recording: return meter?.partial == true ? "GPS had a gap · check miles afterward" : "GPS recording · works with the phone locked"
-        case .idle: return ""
-        }
-    }
-
-    private func afterActiveChanged() {
-        if driving, let a = log.active {
-            if meter?.entryID != a.id { meter = TripMeter(entry: a) }
-            storeMeter()
-            tracker.start()
+        if case .act(let act) = step {
+            next.active = Entry(status: act.status, start: at, from: place, note: act.note + (act == .pretrip ? Places.ldMark : ""))
         } else {
-            meter = nil
-            UserDefaults.standard.removeObject(forKey: Self.meterKey)
-            tracker.stop()
+            next.active = nil
         }
-    }
-
-    /// After a relaunch mid-drive, pick up this phone's meter (newer than the last server save) and keep recording.
-    private func resumeDriveIfNeeded() {
-        guard driving, let a = log.active else { afterActiveChanged(); return }
-        if let data = UserDefaults.standard.data(forKey: Self.meterKey), let saved = try? JSONDecoder().decode(TripMeter.self, from: data),
-           saved.entryID == a.id, (saved.anchor?.time ?? 0) >= (a.lastPoint?.time ?? 0) {
-            meter = saved
-        } else if meter?.entryID != a.id {
-            meter = TripMeter(entry: a)
-        }
-        afterActiveChanged()
-    }
-
-    private func take(_ l: CLLocation) {
-        guard var m = meter, driving else { return }
-        let label = Cities.nearest(lat: l.coordinate.latitude, lon: l.coordinate.longitude).map(Cities.label)
-            ?? String(format: "%.5f, %.5f", l.coordinate.latitude, l.coordinate.longitude)
-        m.take(lat: l.coordinate.latitude, lon: l.coordinate.longitude, accuracy: l.horizontalAccuracy, time: l.timestamp, label: label)
-        meter = m
-        storeMeter()
-        // Save progress to the server every 30 seconds so a lost phone doesn't lose the drive.
-        if Date().timeIntervalSince(lastFlush) > 30 { Task { await flush() } }
-    }
-
-    private func storeMeter() {
-        if let m = meter, let data = try? JSONEncoder().encode(m) { UserDefaults.standard.set(data, forKey: Self.meterKey) }
-    }
-
-    /// Saves the drive's GPS progress quietly.
-    func flush() async {
-        guard driving, !busy, let live = liveActive(), live != log.active else { return }
-        lastFlush = Date()
-        var next = log
-        next.active = live
-        try? await save(next, message: nil)
-    }
-
-    private func finalFix() async {
-        guard let m = meter, Date().timeIntervalSince(m.lastFix ?? .distantPast) > 30 else { return }
-        if let l = await tracker.currentFix() { take(l) }
+        try await save(next, message: step == .clockOut ? "Clocked out" : "Saved")
+        day = clock.dayKey(at)
+        return ended?.status == .driving && ended?.miles == nil ? ended : nil
     }
 
     // MARK: Days and entries

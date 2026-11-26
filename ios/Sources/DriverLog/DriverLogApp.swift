@@ -2,7 +2,7 @@
 import DriverLogCore
 import SwiftUI
 
-/// Launch options used by CI screenshots: `-demo off|clocked|driving` and `-screen daily|history|simple|settings`.
+/// Launch options used by CI screenshots: `-demo off|ld|driving` and `-screen daily|ld|inspect|step|timeline|history|simple|settings`.
 enum LaunchOptions {
     static var demo: String? { UserDefaults.standard.string(forKey: "demo") }
     static var screen: String? { UserDefaults.standard.string(forKey: "screen") }
@@ -22,9 +22,8 @@ struct DriverLogApp: App {
                 .onOpenURL { model.backend.handle($0) }
         }
         .onChange(of: scenePhase) { _, phase in
-            // Save drive progress when leaving the app; refresh when coming back.
-            if phase == .background { Task { await model.flush() } }
-            if phase == .active, model.phase == .signedIn, !model.driving { Task { await model.load() } }
+            // Refresh when coming back, so entries made on the website show up.
+            if phase == .active, model.phase == .signedIn, !model.busy { Task { await model.load() } }
         }
     }
 }
@@ -42,8 +41,11 @@ struct RootView: View {
             case .signedIn:
                 TabView(selection: $model.tab) {
                     LogScreen()
-                        .tabItem { Label("Log", systemImage: "list.clipboard") }
-                        .tag(AppModel.Tab.log)
+                        .tabItem { Label("Today", systemImage: "calendar") }
+                        .tag(AppModel.Tab.today)
+                    LdScreen()
+                        .tabItem { Label("LD", systemImage: "point.topleft.down.to.point.bottomright.curvepath") }
+                        .tag(AppModel.Tab.ld)
                     HistoryScreen()
                         .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
                         .tag(AppModel.Tab.history)
@@ -63,7 +65,10 @@ struct RootView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: model.toast)
-        .onAppear { if LaunchOptions.screen == "history" { model.tab = .history } }
+        .onAppear {
+            if LaunchOptions.screen == "history" { model.tab = .history }
+            if ["ld", "inspect", "step"].contains(LaunchOptions.screen ?? "") { model.tab = .ld }
+        }
     }
 }
 #endif

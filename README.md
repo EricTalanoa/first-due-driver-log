@@ -5,9 +5,9 @@ A driving and duty log for First Due Movers drivers. It keeps a DOT-style duty c
 **Live site:** https://first-due-driver-log-eric.netlify.app
 **Status:** website in daily use · iPhone app in testing ([#13](https://github.com/EricTalanoa/first-due-driver-log/pull/13)) · App Store next
 
-| Log | Drive in progress | History | Simple day |
+| Today | LD in progress | Inspection view | History |
 |---|---|---|---|
-| ![Log screen](https://github.com/EricTalanoa/first-due-driver-log/raw/ios-screenshots/03-log-on-clock.png) | ![Driving](https://github.com/EricTalanoa/first-due-driver-log/raw/ios-screenshots/04-log-driving.png) | ![History](https://github.com/EricTalanoa/first-due-driver-log/raw/ios-screenshots/06-history.png) | ![Simple day](https://github.com/EricTalanoa/first-due-driver-log/raw/ios-screenshots/07-simple-day.png) |
+| ![Today](https://github.com/EricTalanoa/first-due-driver-log/raw/ios-screenshots/02-today.png) | ![LD](https://github.com/EricTalanoa/first-due-driver-log/raw/ios-screenshots/04-ld-driving.png) | ![Inspection view](https://github.com/EricTalanoa/first-due-driver-log/raw/ios-screenshots/06-inspection.png) | ![History](https://github.com/EricTalanoa/first-due-driver-log/raw/ios-screenshots/07-history.png) |
 
 <sub>iPhone app with sample data, captured by CI on every change to `ios/`.</sub>
 
@@ -49,7 +49,7 @@ The publishable Supabase key is in `lib/supabase.ts` and `ios/Sources/DriverLog/
 
 `lib/hos.ts` holds what each LD step means, the timeline ↔ entries conversion, the filled-in chart line and the hours-of-service clocks. `app/hos-chart.tsx` draws the chart; `app/ld-page.tsx` is the LD tab, the inspection view and the fill-in editor.
 
-The iPhone app still has the earlier Log screen and GPS. It reads the same entries, so LD days logged on the web show up there.
+The iPhone app has the same three tabs and uses the Swift port of these rules (`ios/Sources/DriverLogCore/HOS.swift`); days logged on either show up on both.
 
 ## Working on it
 
@@ -77,7 +77,7 @@ xtool dev
 - [x] Simple day with multiple jobs, Edit day, Clear day; better GPS on the web ([#10](https://github.com/EricTalanoa/first-due-driver-log/pull/10))
 - [x] Supabase database and sign-in with Google; import of the old log ([#11](https://github.com/EricTalanoa/first-due-driver-log/pull/11))
 - [x] History grouped by month ([#12](https://github.com/EricTalanoa/first-due-driver-log/pull/12))
-- [ ] iPhone app with background GPS ([#13](https://github.com/EricTalanoa/first-due-driver-log/pull/13), in testing)
+- [ ] iPhone app: Today, LD and History tabs like the website (in testing)
 - [ ] App Store: Sign in with Apple, privacy policy, signed TestFlight builds from CI
 - [ ] Remove the unused starter scaffolding (see below)
 

@@ -120,35 +120,49 @@ final class SupabaseBackend: Backend {
     }
 }
 
-/// In-memory sample data for simulator screenshots: `-demo off|clocked|driving`.
+/// In-memory sample data for simulator screenshots: `-demo off|ld`.
+/// `ld` adds a two-day LD trip last week and an LD day in progress today (driving after a fuel stop).
 final class DemoBackend: Backend {
     private var log: Log
 
     init(state: String, now: Date = Date()) {
         let zone = TimeZone(identifier: "America/Los_Angeles")!
         let clock = Clock(zone: zone)
+        let today = clock.dayKey(now)
         var entries: [Entry] = []
-        for back in 1...24 where back % 7 != 0 && back % 7 != 6 {
-            let day = Clock.shift(clock.dayKey(now), by: -back)
+        let trip = state == "ld" ? [5, 4] : []
+        for back in 1...24 where back % 7 != 0 && back % 7 != 6 && !trip.contains(back) {
+            let day = Clock.shift(today, by: -back)
             let jobs = [Job(load: ["Issaquah", "Bellevue", "Renton", "Kirkland"][back % 4], unload: ["Seattle", "Redmond", "Kent", "Bothell"][back % 4])]
-            if let plan = try? planSimpleDay(SimpleDay(date: day, office: back % 3 == 0 ? .kent : .preston, jobs: jobs, clockIn: "07:45", clockOut: back % 2 == 0 ? "16:30" : "15:45"), zone: zone) {
+            if let plan = try? planSimpleDay(SimpleDay(date: day, jobs: jobs, clockIn: "07:45", clockOut: back % 2 == 0 ? "16:30" : "15:45"), zone: zone) {
                 entries += plan.entries
             }
         }
         var active: Entry?
-        let start = now.addingTimeInterval(-2.5 * 3600)
-        switch state {
-        case "clocked":
-            entries.append(Entry(status: .onDuty, start: start, end: start.addingTimeInterval(2400), from: Office.preston.label, note: "Pre-trip and loading prep"))
-            entries.append(Entry(status: .driving, start: start.addingTimeInterval(2400), end: start.addingTimeInterval(3900), from: Office.preston.label, to: "Issaquah, WA", miles: 6.6, source: .gps))
-            active = Entry(status: .onDuty, start: start.addingTimeInterval(3900), from: "Issaquah, WA")
-        case "driving":
-            entries.append(Entry(status: .onDuty, start: start, end: start.addingTimeInterval(5400), from: "Issaquah, WA", note: "Loading"))
-            active = Entry(status: .driving, start: start.addingTimeInterval(5400), from: "Issaquah, WA", to: "Bellevue, WA", miles: 9.7, source: .gps)
-        default:
-            break
+        if state == "ld" {
+            func steps(_ day: String, _ list: [(String, Step, String)]) -> [Entry] {
+                var prev: Date?
+                let s = list.compactMap { t, step, place -> TimelineStep? in
+                    guard let at = try? clock.stepTime(day: day, t, after: prev) else { return nil }
+                    prev = at
+                    return TimelineStep(time: at, step: step, place: place)
+                }
+                return (try? toEntries(s, tag: Places.ldMark)) ?? []
+            }
+            entries += steps(Clock.shift(today, by: -5), [("07:00", .act(.pretrip), Places.preston), ("07:15", .act(.drive), Places.preston),
+                                                         ("10:00", .act(.fuel), "Ellensburg"), ("10:15", .act(.drive), "Ellensburg"),
+                                                         ("12:30", .act(.lunch), "Richland"), ("13:00", .act(.drive), "Richland"),
+                                                         ("14:15", .act(.posttrip), Places.hotel("Walla Walla")), ("14:30", .clockOut, Places.hotel("Walla Walla"))])
+            entries += steps(Clock.shift(today, by: -4), [("08:00", .act(.pretrip), Places.hotel("Walla Walla")), ("08:15", .act(.drive), Places.hotel("Walla Walla")),
+                                                         ("08:45", .act(.unload), "Walla Walla"), ("13:00", .act(.lunch), "Walla Walla"),
+                                                         ("13:30", .act(.drive), "Walla Walla"), ("18:00", .act(.posttrip), Places.preston), ("18:15", .clockOut, Places.preston)])
+            let start = now.addingTimeInterval(-3 * 3600)
+            entries.append(Entry(status: .onDuty, start: start, end: start.addingTimeInterval(900), from: Places.preston, note: Activity.pretrip.note + Places.ldMark))
+            entries.append(Entry(status: .driving, start: start.addingTimeInterval(900), end: start.addingTimeInterval(7200), from: Places.preston, to: "Ellensburg, WA", miles: 92.9, note: "Driving"))
+            entries.append(Entry(status: .onDuty, start: start.addingTimeInterval(7200), end: start.addingTimeInterval(8100), from: "Ellensburg, WA", note: Activity.fuel.note))
+            active = Entry(status: .driving, start: start.addingTimeInterval(8100), from: "Ellensburg, WA", note: "Driving")
         }
-        log = Log(entries: entries, active: active, profile: Profile(name: "Eric Talanoa", vehicle: "12"))
+        log = Log(entries: entries, active: active, profile: Profile(name: "Eric Talanoa", vehicle: "12", coDriver: ""))
     }
 
     var isSignedIn: Bool { get async { true } }

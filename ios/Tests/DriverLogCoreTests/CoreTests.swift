@@ -166,4 +166,79 @@ final class CoreTests: XCTestCase {
         let b = Entry(status: .offDuty, start: Date(timeIntervalSince1970: 60), end: Date(timeIntervalSince1970: 90))
         XCTAssertThrowsError(try validate(Log(entries: [a, b])))
     }
+
+    // MARK: LD flow, chart and hours of service (matches lib/hos.ts on the website)
+
+    private func ldSteps(_ day: String) throws -> [TimelineStep] {
+        var prev: Date?
+        func at(_ t: String, _ step: Step, _ place: String) throws -> TimelineStep {
+            let time = try clock.stepTime(day: day, t, after: prev)
+            prev = time
+            return TimelineStep(time: time, step: step, place: place)
+        }
+        return [try at("06:30", .act(.pretrip), Places.preston), try at("06:45", .act(.drive), Places.preston),
+                try at("09:30", .act(.fuel), "Ellensburg"), try at("09:45", .act(.drive), "Ellensburg"),
+                try at("11:30", .act(.lunch), "Spokane"), try at("12:00", .act(.unload), "Spokane"),
+                try at("15:00", .act(.drive), "Spokane"), try at("16:30", .act(.posttrip), Places.hotel("Spokane Valley")),
+                try at("16:45", .clockOut, Places.hotel("Spokane Valley"))]
+    }
+
+    func testTimelineRoundTripAndChart() throws {
+        let steps = try ldSteps("2026-11-20")
+        let es = try toEntries(steps, tag: Places.ldMark)
+        XCTAssertEqual(es.count, 8)
+        XCTAssertEqual(es.map(\.status), [.onDuty, .driving, .onDuty, .driving, .offDuty, .onDuty, .driving, .onDuty])
+        XCTAssertEqual(es[1].miles, 92.9)
+        XCTAssertEqual(es[3].to, "Spokane")
+        XCTAssertTrue(es[0].note.hasSuffix(Places.ldMark))
+        try validate(Log(entries: es), now: es.last!.end!)
+        XCTAssertEqual(toSteps(es).map(\.step), steps.map(\.step))
+        XCTAssertEqual(toSteps(es).map(\.time), steps.map(\.time))
+        let chart = Chart(entries: es, day: "2026-11-20", clock: clock, now: Date())
+        XCTAssertEqual(chart.totals.values.reduce(0, +), 24 * 3600)
+        XCTAssertEqual(chart.totals[.driving], 6 * 3600)
+        XCTAssertEqual(chart.remarks.count, 8)
+        XCTAssertEqual(chart.clockOut?.id, es.last!.id)
+        XCTAssertTrue(isLdDay(es))
+    }
+
+    func testPastMidnightSplitsAcrossDays() throws {
+        var prev: Date?
+        let steps = try [("20:00", Step.act(.pretrip)), ("20:15", .act(.drive)), ("01:00", .act(.posttrip)), ("01:15", .clockOut)].map { t, s -> TimelineStep in
+            let time = try clock.stepTime(day: "2026-11-20", t, after: prev); prev = time
+            return TimelineStep(time: time, step: s, place: "Boise")
+        }
+        let es = try toEntries(steps)
+        XCTAssertEqual(clock.dayKey(es.last!.end!), "2026-11-21")
+        let day2 = Chart(entries: es, day: "2026-11-21", clock: clock, now: Date())
+        XCTAssertEqual(day2.totals[.driving], 3600)
+        XCTAssertEqual(day2.totals.values.reduce(0, +), 24 * 3600)
+    }
+
+    func testHosClocks() throws {
+        let es = try toEntries(try ldSteps("2026-11-20"))
+        let c = HosClocks(entries: es, now: try clock.date(day: "2026-11-20", time: "13:00"))
+        XCTAssertEqual(c.drive, 6.5 * 3600)
+        XCTAssertEqual(c.window, 7.5 * 3600)
+        XCTAssertEqual(c.breakDue, 8 * 3600)
+        XCTAssertEqual(c.cycle, 64 * 3600)
+    }
+
+    func testActivitiesAndSteps() {
+        XCTAssertEqual(Activity.of(Entry(status: .onDuty, start: Date(), note: "Unloading (job 2)")), .unload)
+        XCTAssertEqual(Activity.of(Entry(status: .onDuty, start: Date(), note: "Pre-trip inspection / prep at office | Simple day entry")), .pretrip)
+        XCTAssertEqual(Activity.fuel.status, .onDuty)
+        XCTAssertEqual(Activity.riding.status, .onDuty)
+        XCTAssertEqual(nextSteps(nil), [.act(.pretrip)])
+        XCTAssertEqual(Step.act(.drive).label(now: .riding), "Take the wheel")
+        XCTAssertFalse(isLdDay([Entry(status: .driving, start: Date(), from: Places.preston, to: "Clyde Hill")]))
+        XCTAssertTrue(isLdDay([Entry(status: .driving, start: Date(), from: Places.preston, to: "Pullman")]))
+    }
+
+    func testHistoryGroupsLdTrips() {
+        func day(_ d: String, _ ld: Bool) -> DaySummary { DaySummary(day: d, first: Date(), last: Date(), lunch: 0, worked: 0, miles: 10, open: false, ld: ld) }
+        let g = groupTrips([day("2026-11-23", false), day("2026-11-21", true), day("2026-11-20", true), day("2026-11-17", true), day("2026-11-16", false)])
+        XCTAssertEqual(g.map(\.days.count), [1, 2, 1, 1])
+        XCTAssertEqual(g.map(\.ld), [false, true, true, false])
+    }
 }

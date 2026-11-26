@@ -2,19 +2,24 @@
 
 The native app for the First Due driver's log, built with SwiftUI and [xtool](https://github.com/xtool-org/xtool) from Windows (WSL). It uses the same Supabase account and data as the website, so entries made on either show up on both.
 
-## What's different from the website
+## Screens
 
-- **GPS keeps recording with the phone locked.** During a drive the app uses iOS 17's background location session with "While Using" permission. iOS shows the blue location pill while it records. Fixes go through the same trip meter as the website (`Sources/DriverLogCore/TripMeter.swift`).
-- Drive progress is saved on the phone after every fix and to Supabase every 30 seconds, so a crash or relaunch mid-drive picks up where it left off.
+The same three tabs as the website:
+
+- **Today**: Add entry (Simple day, step by step, Advanced), then the day's DOT chart with totals and remarks, and the entries. Tap the chart to edit an entry.
+- **LD**: tap through the day (Clock in, Start driving, Fuel stop, Quick break, Lunch, Start unload, Switch drivers, Arrive · post-trip, Clock out), each with a time and place; hours-of-service clocks; the inspection view of the last 8 days; Fill in or fix a day; Estimate an LD day.
+- **History**: days by month, with LD trips outlined in red.
+
+GPS tracking is shelved, as on the website: the app doesn't ask for location. The trip meter stays in `DriverLogCore` for later.
 
 ## Layout
 
 | Path | What it is |
 |---|---|
-| `Sources/DriverLogCore` | UI-free logic shared with the website's rules: models, home-terminal time math, Simple day planner, GPS trip meter, Supabase row mapping, History summaries. Builds on macOS so it can be unit tested. |
+| `Sources/DriverLogCore` | UI-free logic shared with the website's rules: models, home-terminal time math, Simple day planner, LD steps, DOT chart and hours-of-service clocks (`HOS.swift`), Supabase row mapping, History summaries. Builds on macOS so it can be unit tested. |
 | `Sources/DriverLog` | The SwiftUI app: sign-in, Log (Add entry, Clock in/out, Start driving, Set status, Daily log), History, Settings, editors. |
-| `Tests/DriverLogCoreTests` | Planner results match the website, daylight saving, GPS gaps and glitches, sync diffs. |
-| `xtool.yml`, `Info.plist`, `AppIcon.png` | Bundle ID, location permission text, background location mode, sign-in callback URL scheme, icon. |
+| `Tests/DriverLogCoreTests` | Planner results and LD charts match the website, hours-of-service clocks, daylight saving, sync diffs. |
+| `xtool.yml`, `Info.plist`, `AppIcon.png` | Bundle ID, sign-in callback URL scheme, icon. |
 | `ci/` | macOS CI scripts: core tests, iOS build, simulator screenshots with sample data (`-demo`). |
 
 ## Run it on your iPhone
@@ -33,8 +38,6 @@ Each time:
    git pull
    xtool dev
    ```
-
-The first time you tap **Start driving**, choose **Allow While Using App** for location.
 
 **One-time setup on a new PC**, in addition to WSL, Swift, xtool and `xtool setup`:
 

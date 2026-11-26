@@ -27,12 +27,16 @@ struct SimpleDayEditor: View {
                 VStack(alignment: .leading, spacing: 16) {
                     DatePicker("Date", selection: dateBinding(zone), displayedComponents: .date)
                         .font(.subheadline.weight(.semibold))
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Starting office").font(.subheadline.weight(.semibold))
-                        Picker("Starting office", selection: $v.office) {
-                            ForEach(Office.allCases) { Text($0.rawValue).tag($0) }
+                    if v.office != .preston {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Starting office").font(.subheadline.weight(.semibold))
+                            Picker("Starting office", selection: $v.office) {
+                                ForEach(Office.allCases) { Text($0.rawValue).tag($0) }
+                            }
+                            .pickerStyle(.segmented)
                         }
-                        .pickerStyle(.segmented)
+                    } else {
+                        Text("Starts and ends at the Preston office.").font(.subheadline).foregroundStyle(Brand.muted)
                     }
                     ForEach(Array(v.jobs.enumerated()), id: \.offset) { i, _ in
                         VStack(alignment: .leading, spacing: 10) {
@@ -118,7 +122,7 @@ struct SimpleDayEditor: View {
         } else {
             v = SimpleDay(date: day)
             if let data = UserDefaults.standard.data(forKey: Self.defaultsKey), let r = try? JSONDecoder().decode(Remembered.self, from: data) {
-                v.office = r.office; v.clockIn = r.clockIn; v.clockOut = r.clockOut; v.lunch = r.lunch
+                v.clockIn = r.clockIn; v.clockOut = r.clockOut; v.lunch = r.lunch
             }
         }
         ready = true
@@ -255,10 +259,13 @@ struct LdDayEditor: View {
             }
             .pickerStyle(.segmented)
             if value.wrappedValue.at == .office {
-                Picker("\(label) office", selection: value.office) {
-                    ForEach(Office.allCases) { Text($0.rawValue).tag($0) }
+                // Kent closed; its picker only shows for an older Kent day.
+                if value.wrappedValue.office != .preston {
+                    Picker("\(label) office", selection: value.office) {
+                        ForEach(Office.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
                 }
-                .pickerStyle(.segmented)
             } else {
                 CityField(label: "Hotel city", placeholder: "e.g. Spokane", text: value.hotel)
             }
@@ -276,7 +283,7 @@ struct LdDayEditor: View {
             v = LdDay(date: day)
             // Reuse the office and clock times remembered by Simple day.
             if let data = UserDefaults.standard.data(forKey: "simple-defaults"), let r = try? JSONDecoder().decode(Remembered.self, from: data) {
-                v.start.office = r.office; v.end.office = r.office; v.clockIn = r.clockIn; v.clockOut = r.clockOut; v.lunch = r.lunch
+                v.clockIn = r.clockIn; v.clockOut = r.clockOut; v.lunch = r.lunch
             }
         }
         ready = true
@@ -378,7 +385,7 @@ struct EntryEditor: View {
             Form {
                 Section {
                     if entry.partial {
-                        Note(text: "GPS may be incomplete. Enter the actual distance from your odometer to confirm it.")
+                        Note(text: "This GPS distance may be incomplete. Enter the actual miles to confirm it.")
                     }
                     Picker("Duty status", selection: $value.status) {
                         ForEach(Status.allCases) { Text($0.rawValue).tag($0) }
@@ -408,7 +415,7 @@ struct EntryEditor: View {
                     Section { Button("Delete entry", role: .destructive) { confirmDelete = true } }
                 }
             }
-            .navigationTitle(entry.source == .gps ? "Review your trip" : "Log entry")
+            .navigationTitle(entry.status == .driving && entry.miles == nil ? "Enter the miles" : "Log entry")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
