@@ -360,7 +360,8 @@ struct StepSheet: View {
         .onAppear {
             guard !ready else { return }
             ready = true
-            if let a = model.active { place = a.status == .driving ? "" : a.from } else { place = suggestions().first ?? "" }
+            // Preselect the first real suggestion (the hotel slot is blank when last night wasn't one).
+            if let a = model.active { place = a.status == .driving ? "" : a.from } else { place = suggestions().first { !$0.isEmpty } ?? "" }
         }
     }
 
