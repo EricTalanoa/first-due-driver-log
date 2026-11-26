@@ -12,9 +12,16 @@ print(sorted(c,key=lambda x:x["name"])[-1]["udid"])')
 xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b
 START=$(date +%s)
-xcodebuild test -project DriverLogHost.xcodeproj -scheme DriverLogHost -sdk iphonesimulator \
-  -destination "id=$UDID" -derivedDataPath ../../dd-tests -skipPackagePluginValidation -skipMacroValidation \
-  -resultBundlePath ../../ui-tests.xcresult 2>&1 | grep -E "Test Case|error:|XCTAssert|Executed|TEST (SUCCEEDED|FAILED)"
+OPTS=(-project DriverLogHost.xcodeproj -scheme DriverLogHost -sdk iphonesimulator -destination "id=$UDID" \
+  -derivedDataPath ../../dd-tests -skipPackagePluginValidation -skipMacroValidation)
+xcodebuild build-for-testing "${OPTS[@]}" -quiet || exit 1
+# Warm up: the first launch on a fresh simulator can fail while it is still migrating data after boot.
+APP=$(find ../../dd-tests/Build/Products -name DriverLogHost.app -maxdepth 2 | head -1)
+xcrun simctl install "$UDID" "$APP"
+xcrun simctl launch "$UDID" com.erictalanoa.DriverLogHost -demo off >/dev/null && sleep 15
+xcrun simctl terminate "$UDID" com.erictalanoa.DriverLogHost 2>/dev/null || true
+xcodebuild test-without-building "${OPTS[@]}" -resultBundlePath ../../ui-tests.xcresult 2>&1 \
+  | grep -E "Test Case|error:|XCTAssert|Executed|TEST (SUCCEEDED|FAILED)|TEST EXECUTE"
 STATUS=${PIPESTATUS[0]}
 # If the app crashed, print the top of its crash report (exception and the crashing thread's frames).
 for f in $(find ~/Library/Logs/DiagnosticReports -name 'DriverLogHost*' -newermt "@$START" 2>/dev/null | head -2); do
