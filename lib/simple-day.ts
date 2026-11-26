@@ -25,8 +25,9 @@ export function findCity(input: string) {
   const parts = input.split(',').map(p => key(p.replace(/\b(wa|or|id|washington|oregon|idaho)\b/gi, '').replace(/\d{5}(-\d{4})?/, ''))).filter(Boolean);
   for (const p of [...parts].reverse()) if (cities[p]) return cities[p];
   const whole = key(input);
-  const hit = Object.keys(cities).filter(k => k.startsWith(whole));
-  return whole.length >= 3 && hit.length === 1 ? cities[hit[0]] : null;
+  const hit = Object.keys(cities).filter(k => k.startsWith(whole)).sort((a, b) => a.length - b.length);
+  // "issaq" matches Issaquah and Issaquah Highlands: take the shorter name when it starts all the others.
+  return whole.length >= 3 && hit.length && hit.every(k => k.startsWith(hit[0])) ? cities[hit[0]] : null;
 }
 
 export function straightMiles(a: { lat: number; lon: number }, b: { lat: number; lon: number }) {

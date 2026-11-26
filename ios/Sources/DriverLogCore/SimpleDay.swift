@@ -62,8 +62,10 @@ public enum Cities {
         }.filter { !$0.isEmpty }
         for p in parts.reversed() { if let c = all[p] { return c } }
         let whole = key(input)
-        let hits = all.keys.filter { $0.hasPrefix(whole) }
-        return whole.count >= 3 && hits.count == 1 ? all[hits[0]] : nil
+        let hits = all.keys.filter { $0.hasPrefix(whole) }.sorted { $0.count < $1.count }
+        // "issaq" matches Issaquah and Issaquah Highlands: take the shorter name when it starts all the others.
+        guard whole.count >= 3, let first = hits.first, hits.allSatisfy({ $0.hasPrefix(first) }) else { return nil }
+        return all[first]
     }
 
     /// Closest known city to a GPS point, if one is within range.
