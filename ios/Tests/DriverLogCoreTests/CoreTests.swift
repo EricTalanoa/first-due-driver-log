@@ -79,7 +79,7 @@ final class CoreTests: XCTestCase {
     func testLdChecks() {
         XCTAssertThrowsError(try planLdDay(LdDay(date: "2025-03-04", end: LdPlace(at: .office)), zone: pacific))
         XCTAssertThrowsError(try planLdDay(LdDay(date: "2025-03-04", unload: " ", end: LdPlace(at: .hotel, hotel: "Spokane")), zone: pacific))
-        let unknown = LdDay(date: "2025-03-04", start: LdPlace(at: .hotel, hotel: "Boise, ID"), end: LdPlace(at: .hotel, hotel: "Spokane"), clockIn: "06:00", clockOut: "16:00", lunch: 0)
+        let unknown = LdDay(date: "2025-03-04", start: LdPlace(at: .hotel, hotel: "Missoula, MT"), end: LdPlace(at: .hotel, hotel: "Spokane"), clockIn: "06:00", clockOut: "16:00", lunch: 0)
         XCTAssertThrowsError(try planLdDay(unknown, zone: pacific))
         var withMiles = unknown
         withMiles.miles = 300
@@ -90,6 +90,9 @@ final class CoreTests: XCTestCase {
     func testFindCity() {
         XCTAssertEqual(Cities.find("123 Main St, Kent, WA 98032")?.name, "Kent")
         XCTAssertEqual(Cities.find("issaq")?.name, "Issaquah")
+        XCTAssertEqual(Cities.find("Issaquah High")?.name, "Issaquah Highlands")
+        XCTAssertEqual(Cities.find("Coeur dAlene, ID 83814")?.name, "Coeur d'Alene")
+        XCTAssertNil(Cities.find("Bell"))
         XCTAssertEqual(Cities.nearest(lat: 47.535, lon: -122.04)?.name, "Issaquah")
         XCTAssertNil(Cities.nearest(lat: 46.0, lon: -121.0))
     }
