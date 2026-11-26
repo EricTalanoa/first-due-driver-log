@@ -62,7 +62,7 @@ function StepDialog({ act, current, active, zone, suggestions, busy, now: shown,
   return <Modal title={stepLabel(act, current)} onClose={onClose}><form onSubmit={submit} className="simple-day">
     <Field label="Time"><input type="time" required value={time} onChange={e => setTime(e.target.value)} /></Field>
     <PlaceInput label={act === 'clockout' ? 'Where you finished' : act === 'pretrip' ? 'Starting from' : ending ? 'Where you stopped' : 'Where you are'} value={place} onChange={setPlace} suggestions={suggestions} />
-    {ending && <Field label={`Miles for this drive${estimate !== null ? ` · estimate ${estimate.toFixed(1)}` : ''}`}><input type="number" inputMode="decimal" min="0" max="100000" step="0.1" placeholder={estimate !== null ? 'Leave blank to use the estimate' : 'City not recognized: enter miles'} value={miles} onChange={e => setMiles(e.target.value)} /></Field>}
+    {ending && <Field label={`Miles for this drive${estimate !== null ? ` · estimate ${estimate.toFixed(1)}` : ''}`}><input type="number" inputMode="decimal" min="0" max="100000" step="0.1" placeholder={estimate !== null ? 'Leave blank to use the estimate' : !place ? 'Estimated once you pick where you stopped' : 'City not recognized: enter miles'} value={miles} onChange={e => setMiles(e.target.value)} /></Field>}
     {act === 'riding' && <p className="subtle">Riding in the passenger seat while your co-driver drives is logged as On duty.</p>}
     {act === 'fuel' && <p className="subtle">Fueling is On duty under DOT rules. Use Quick break for a stop where you are off work.</p>}
     {error && <p className="alert" role="alert">{error}</p>}

@@ -330,7 +330,7 @@ struct StepSheet: View {
                     PlaceField(label: step == .clockOut ? "Where you finished" : step == .act(.pretrip) ? "Starting from" : ending ? "Where you stopped" : "Where you are",
                                suggestions: suggestions(), place: $place)
                     if ending {
-                        TextField(estimate.map { "Leave blank to use \(milesText($0)) mi" } ?? "City not recognized: enter miles", text: $miles)
+                        TextField(estimate.map { "Leave blank to use \(milesText($0)) mi" } ?? (place.isEmpty ? "Estimated once you pick where you stopped" : "City not recognized: enter miles"), text: $miles)
                             .keyboardType(.decimalPad)
                             .field("Miles for this drive\(estimate.map { " · estimate \(milesText($0))" } ?? "")")
                     }
