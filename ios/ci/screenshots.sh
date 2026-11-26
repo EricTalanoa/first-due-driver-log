@@ -22,14 +22,15 @@ shoot() { # name, launch args...
   local name=$1; shift
   xcrun simctl terminate "$UDID" com.erictalanoa.DriverLogHost 2>/dev/null || true
   xcrun simctl launch "$UDID" com.erictalanoa.DriverLogHost "$@" >/dev/null
-  sleep 6
+  sleep "${WAIT:-6}"
   xcrun simctl io "$UDID" screenshot "ci-shots/$name.png" >/dev/null
 }
 shoot 01-sign-in
 shoot 02-today -demo ld
 shoot 03-ld-off-clock -demo off -screen ld
 shoot 04-ld-driving -demo ld -screen ld
-shoot 05-ld-step -demo ld -screen step
+# Sheets opened at launch need a moment longer to finish presenting.
+WAIT=10 shoot 05-ld-step -demo ld -screen step
 shoot 06-inspection -demo ld -screen inspect
 shoot 07-history -demo ld -screen history
 shoot 08-fill-in-day -demo ld -screen timeline

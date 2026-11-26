@@ -123,7 +123,7 @@ final class AppModel: ObservableObject {
         var next = log
         var ended: Entry?
         if var a = log.active {
-            guard at > a.start else { throw LogError("That's before your current \(Activity.of(a).label.lowercased()) started. Check the time.") }
+            guard at > a.start else { throw LogError("What you're doing now started at \(clock.time(a.start)). Pick a time after that.") }
             a.end = at
             if a.status == .driving {
                 a.to = place
@@ -161,11 +161,18 @@ final class AppModel: ObservableObject {
         try await save(next, message: "Entry deleted")
     }
 
+    /// Whether what is being recorded now falls on `day` (Clear day removes it too).
+    func recording(on day: String) -> Bool { log.active.map { $0.start < clock.bounds(day).end } ?? false }
+
+    /// Clear day: deletes the whole day and starts it over, including a drive or work being recorded now.
     func clear(day: String) async throws {
         let gone = Set(entries(startingOn: day).map(\.id))
+        let drop = recording(on: day)
         var next = log
         next.entries.removeAll { gone.contains($0.id) }
-        try await save(next, message: "Cleared \(gone.count) entries")
+        if drop { next.active = nil }
+        let n = gone.count + (drop ? 1 : 0)
+        try await save(next, message: "Cleared \(n) \(n == 1 ? "entry" : "entries")")
     }
 
     func saveSimpleDay(_ entries: [Entry], date: String, replace: Bool) async throws {

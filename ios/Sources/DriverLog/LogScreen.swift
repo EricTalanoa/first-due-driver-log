@@ -77,7 +77,7 @@ struct LogScreen: View {
         .alert("Clear this day?", isPresented: $confirmClear) {
             Button("Clear day", role: .destructive) { Task { try? await model.clear(day: model.day) } }
         } message: {
-            Text("This deletes all \(model.entries(startingOn: model.day).count) entries that start on \(Clock.label(model.day, "EEEE, MMMM d")). Anything you are recording now is kept.")
+            Text("This deletes all \(model.entries(startingOn: model.day).count + (model.recording(on: model.day) ? 1 : 0)) entries on \(Clock.label(model.day, "EEEE, MMMM d"))\(model.recording(on: model.day) ? ", including what you're recording now" : ""). The day starts over. This can't be undone.")
         }
         .sheet(item: $sheet) { $0.view(model) }
         .onAppear {
@@ -167,7 +167,7 @@ struct DailyLog: View {
                 Spacer()
                 Button(role: .destructive) { confirmClear = true } label: { Label("Clear day", systemImage: "trash") }
                     .font(.footnote.weight(.semibold))
-                    .disabled(model.busy || started.isEmpty)
+                    .disabled(model.busy || (started.isEmpty && !model.recording(on: day)))
             }
             if view.rows.isEmpty {
                 VStack(spacing: 6) {

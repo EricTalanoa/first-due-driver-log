@@ -215,6 +215,17 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(day2.totals.values.reduce(0, +), 24 * 3600)
     }
 
+    func testStepAtRoundsUpAndNamesTheTime() throws {
+        let now = try clock.date(day: "2026-11-26", time: "08:19").addingTimeInterval(14)
+        let drive = try clock.date(day: "2026-11-26", time: "08:20")
+        // Saved a minute ahead (the reported bug): a later pick still works.
+        XCTAssertEqual(try clock.stepAt("08:21", now: now, after: drive), now.addingTimeInterval(55))
+        XCTAssertThrowsError(try clock.stepAt("08:19", now: now, after: drive)) { XCTAssertTrue("\($0.localizedDescription)".contains("8:20 AM")) }
+        XCTAssertEqual(try clock.stepAt("08:19", now: now, after: drive.addingTimeInterval(-120)), try clock.date(day: "2026-11-26", time: "08:19"))
+        XCTAssertEqual(try clock.stepAt("23:00", now: now), try clock.date(day: "2026-11-25", time: "23:00"))
+        XCTAssertThrowsError(try clock.stepAt("23:00", now: now, after: try clock.date(day: "2026-11-26", time: "07:00")))
+    }
+
     func testHosClocks() throws {
         let es = try toEntries(try ldSteps("2026-11-20"))
         let c = HosClocks(entries: es, now: try clock.date(day: "2026-11-20", time: "13:00"))

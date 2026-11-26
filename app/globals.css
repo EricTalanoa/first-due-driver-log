@@ -131,3 +131,8 @@ dialog.wide{width:900px}
 .ld-trip-head span:last-child{margin-left:auto;font-variant-numeric:tabular-nums}
 .ld-badge{background:#b52127;color:#fff;font-size:12px;font-weight:800;letter-spacing:.08em;padding:3px 8px;border-radius:6px}
 .ld-trip .history-row{border-color:#ecc4c6}
+
+.place-options{display:grid;gap:8px;margin-bottom:8px}
+.place-options button{justify-content:flex-start;min-height:48px;padding:10px 14px;border:1px solid #cdd2d9;border-radius:10px;background:#fff;color:#252b32;font-weight:600;text-align:left}
+.place-options button[aria-pressed=true]{background:#b52127;border-color:#b52127;color:#fff}
+.ld-clear{margin-top:14px;padding-top:12px;border-top:1px solid #eceef1}

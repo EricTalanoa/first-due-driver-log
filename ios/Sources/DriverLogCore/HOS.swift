@@ -195,6 +195,27 @@ extension Clock {
     }
 }
 
+extension Clock {
+    /// The moment a live LD step happened, from the "HH:mm" the driver picked. Drivers round up, so a time up to
+    /// 15 minutes ahead means "now"; a time further ahead means last night. `after` is when the current step started.
+    public func stepAt(_ hhmm: String, now: Date, after: Date? = nil) throws -> Date {
+        var at = try date(day: dayKey(now), time: hhmm)
+        if at > now {
+            if at.timeIntervalSince(now) <= 15 * 60 {
+                // Can't save a start in the future, but it must still land after the current step (which may itself be a little ahead).
+                let capped = min(at, now.addingTimeInterval(55))
+                if let after, at > after { at = max(capped, after.addingTimeInterval(1)) } else { at = capped }
+            } else {
+                let night = try date(day: Clock.shift(dayKey(now), by: -1), time: hhmm)
+                if let after, night <= after { throw LogError("\(time(at)) hasn't happened yet. It's \(time(now)) now.") }
+                at = night
+            }
+        }
+        if let after, at <= after { throw LogError("What you're doing now started at \(time(after)). Pick a time after that.") }
+        return at
+    }
+}
+
 // MARK: The 24-hour chart
 
 public struct Segment: Equatable, Sendable {

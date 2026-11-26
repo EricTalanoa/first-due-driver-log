@@ -109,6 +109,26 @@ export function stepTime(day: string, hhmm: string, zone: string, after?: number
 }
 export const hhmm = (t: number, zone: string) => localInput(t, zone).slice(11);
 
+/**
+ * The moment a live LD step happened, from the "HH:MM" the driver picked. Drivers round up, so a time up to
+ * 15 minutes ahead means "now"; a time further ahead means last night. `after` is when the current step started.
+ */
+export function stepAt(time: string, zone: string, now: number, after?: number) {
+  const label = (t: number) => new Intl.DateTimeFormat('en-US', { timeZone: zone, hour: 'numeric', minute: '2-digit' }).format(t);
+  let at = epoch(`${dayKey(now, zone)}T${time}`, zone);
+  if (at > now) {
+    // Can't save a start in the future, but it must still land after the current step (which may itself be a little ahead).
+    if (at - now <= 15 * 60000) at = after !== undefined && at > after ? Math.max(Math.min(at, now + 55000), after + 1000) : Math.min(at, now + 55000);
+    else {
+      const night = epoch(`${dayKey(now - 86400000, zone)}T${time}`, zone);
+      if (after !== undefined && night <= after) throw new Error(`${label(at)} hasn't happened yet. It's ${label(now)} now.`);
+      at = night;
+    }
+  }
+  if (after !== undefined && at <= after) throw new Error(`What you're doing now started at ${label(after)}. Pick a time after that.`);
+  return at;
+}
+
 // ---- The 24-hour chart ----
 
 export type Segment = { status: Status; start: number; end: number; filled: boolean; entry?: Entry };

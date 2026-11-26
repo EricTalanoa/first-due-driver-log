@@ -8,6 +8,7 @@ import SwiftUI
 struct LdScreen: View {
     @EnvironmentObject var model: AppModel
     @State private var sheet: Sheet?
+    @State private var confirmClear = false
 
     var body: some View {
         let clock = model.clock
@@ -58,6 +59,10 @@ struct LdScreen: View {
                             .font(.subheadline.weight(.semibold)).foregroundStyle(Brand.darkRed)
                         Button { sheet = .ld } label: { Label("Estimate an LD day", systemImage: "function") }
                             .font(.subheadline.weight(.semibold)).foregroundStyle(Brand.darkRed)
+                        Divider()
+                        Button(role: .destructive) { confirmClear = true } label: { Label("Clear day", systemImage: "trash") }
+                            .font(.subheadline.weight(.semibold))
+                            .disabled(!model.loaded || model.busy || !loggedToday)
                     }
                 }
                 .padding(16)
@@ -67,6 +72,12 @@ struct LdScreen: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .sheet(item: $sheet) { $0.view(model) }
+        .alert("Clear today's LD log?", isPresented: $confirmClear) {
+            Button("Clear day", role: .destructive) { Task { try? await model.clear(day: today) } }
+            Button("Keep entries", role: .cancel) {}
+        } message: {
+            Text("This deletes everything logged today\(model.active.map { ", including what you're recording now (\(Activity.of($0).note.lowercased()))" } ?? ""). The day starts over at Off the clock. It can't be undone.")
+        }
         .onAppear {
             switch LaunchOptions.screen {
             case "inspect": sheet = .inspect
@@ -238,67 +249,62 @@ private struct ChartWidth: PreferenceKey {
 
 // MARK: Places
 
-/// Suggested places as chips, plus a typed city or address, with a Hotel switch.
+/// The suggested places, then Other with a box for any city or address.
 struct PlaceField: View {
     let label: String
     let suggestions: [String]
     @Binding var place: String
-    @State private var isHotel = false
-    @State private var text = ""
+    @State private var other = false
+    @State private var ready = false
     @FocusState private var focused: Bool
 
     var body: some View {
         var seen = Set<String>()
-        let chips = suggestions.filter { !$0.isEmpty && seen.insert($0).inserted }.prefix(5)
-        let matches = text.count >= 2 ? Cities.names.filter { $0.lowercased().hasPrefix(text.lowercased()) && $0 != text }.prefix(4) : []
+        let chips = Array(suggestions.filter { !$0.isEmpty && seen.insert($0).inserted }.prefix(5))
+        let matches = other && place.count >= 2 ? Array(Cities.names.filter { $0.lowercased().hasPrefix(place.lowercased()) && $0 != place }.prefix(4)) : []
         VStack(alignment: .leading, spacing: 8) {
             Text(label).font(.subheadline.weight(.semibold))
-            if !chips.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack {
-                        ForEach(Array(chips), id: \.self) { c in
-                            Button(Places.short(c)) { place = c; text = ""; focused = false }
-                                .font(.subheadline.weight(.semibold))
-                                .padding(.horizontal, 14).frame(minHeight: 40)
-                                .foregroundStyle(place == c ? Brand.darkRed : Brand.ink)
-                                .background(place == c ? Color(red: 0.99, green: 0.96, blue: 0.96) : .white, in: Capsule())
-                                .overlay(Capsule().stroke(place == c ? Brand.red : Color(white: 0.8)))
-                        }
-                    }
-                }
+            ForEach(chips, id: \.self) { c in
+                option(Places.short(c), selected: !other && place == c) { other = false; place = c; focused = false }
             }
-            HStack(spacing: 12) {
-                TextField(isHotel ? "Hotel city or address" : chips.isEmpty ? "City or address" : "Or type a city or address", text: $text)
+            option("Other", selected: other) {
+                if !other { other = true; place = ""; focused = true }
+            }
+            if other {
+                TextField("City, address or hotel", text: $place)
                     .textInputAutocapitalization(.words).autocorrectionDisabled().focused($focused)
                     .padding(.horizontal, 12).frame(minHeight: 46)
                     .background(.white, in: RoundedRectangle(cornerRadius: 10))
                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(white: 0.8)))
-                    .onChange(of: text) { _, _ in compose() }
-                Toggle("Hotel", isOn: $isHotel).fixedSize().onChange(of: isHotel) { _, _ in if !text.isEmpty { compose() } }
-            }
-            if focused && !matches.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack {
-                        ForEach(Array(matches), id: \.self) { name in
-                            Button(name) { text = name; focused = false }
-                                .font(.subheadline).padding(.horizontal, 12).padding(.vertical, 6)
-                                .background(Brand.page, in: Capsule())
+                if !matches.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack {
+                            ForEach(matches, id: \.self) { name in
+                                Button(name) { place = name; focused = false }
+                                    .font(.subheadline).padding(.horizontal, 12).padding(.vertical, 6)
+                                    .background(Brand.page, in: Capsule())
+                            }
                         }
                     }
                 }
             }
         }
         .onAppear {
-            if !place.isEmpty && !chips.contains(place) {
-                isHotel = place.hasPrefix("Hotel – ")
-                text = isHotel ? String(place.dropFirst("Hotel – ".count)) : place
-            }
+            guard !ready else { return }
+            ready = true
+            other = chips.isEmpty || (!place.isEmpty && !chips.contains(place))
         }
     }
 
-    private func compose() {
-        let t = text.trimmingCharacters(in: .whitespaces)
-        if !t.isEmpty { place = isHotel ? Places.hotel(t) : t }
+    private func option(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.body.weight(.semibold)).lineLimit(2)
+                .foregroundStyle(selected ? .white : Brand.ink)
+                .padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                .background(selected ? Brand.red : .white, in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(selected ? Brand.red : Color(white: 0.8)))
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -368,7 +374,7 @@ struct StepSheet: View {
             let prev = model.log.entries.filter { e in e.end.map { $0 <= before && $0 > before.addingTimeInterval(-86_400) } ?? false }
                 .max { $0.end! < $1.end! }
             let last = prev.map { $0.to.isEmpty ? $0.from : $0.to } ?? ""
-            return [last.isEmpty || last == Places.preston ? "" : Places.hotel(last), Places.preston]
+            return [last == Places.preston ? "" : last, Places.preston]
         }
         if step == .clockOut || step == .act(.posttrip) { return todays.filter { $0.hasPrefix("Hotel – ") } + [Places.preston] + todays }
         return Array(todays) + [Places.preston]
@@ -377,9 +383,8 @@ struct StepSheet: View {
     private func save(ending: Bool, estimate: Double?) async {
         error = ""
         let clock = model.clock
-        let now = Date()
-        var at = (try? clock.date(day: clock.dayKey(now), time: clock.hhmm(time))) ?? time
-        if at > now.addingTimeInterval(60) { at = (try? clock.date(day: Clock.shift(clock.dayKey(now), by: -1), time: clock.hhmm(time))) ?? at }
+        let at: Date
+        do { at = try clock.stepAt(clock.hhmm(time), now: Date(), after: model.active?.start) } catch { self.error = error.localizedDescription; return }
         let trimmed = place.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { error = "Enter where you are. The log needs the city at every change."; return }
         var typed: Double?
