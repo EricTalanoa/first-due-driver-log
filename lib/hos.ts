@@ -1,5 +1,5 @@
 import { bounds, epoch, localInput, dayKey, type Entry, type Status } from './log';
-import { findCity, roadMiles, offices } from './simple-day';
+import { findCity, roadMiles, straightMiles, offices } from './simple-day';
 
 // Hours-of-service helpers: what each tap in the LD flow means, the filled-in 24-hour chart,
 // and the federal limits for property-carrying drivers (49 CFR 395.3).
@@ -56,6 +56,16 @@ export function estimateMiles(from: string, to: string) {
   const a = cityOf(from), b = cityOf(to);
   return a && b ? Math.round(roadMiles(a, b) * 10) / 10 : null;
 }
+/** Marks the first entry of a day logged on the LD tab, so History can group LD days. */
+export const LD_MARK = ' | LD trip';
+/**
+ * Whether a day was long distance: logged on the LD tab or with the LD estimate, a hotel stop,
+ * or a place more than 150 air-miles from the Preston office (the short-haul limit).
+ */
+export function isLdDay(es: Entry[]) {
+  return es.some(e => /\bLD\b/.test(e.note) || [e.from, e.to].some(p => p.startsWith(HOTEL) || far(p)));
+}
+const far = (p: string) => { const c = p ? cityOf(p) : null; return !!c && straightMiles(c, offices.Preston) > 150; };
 export const hotel = (city: string) => (city.startsWith(HOTEL) ? city : HOTEL + city);
 
 // ---- Timeline: the day as a list of status changes, for filling in or fixing a day ----
@@ -76,7 +86,7 @@ export function toSteps(entries: Entry[]): Step[] {
 }
 
 /** Turns status changes back into entries. Each step runs until the next one; the last must be Clock out. */
-export function toEntries(steps: Step[]): Entry[] {
+export function toEntries(steps: Step[], tag = ''): Entry[] {
   if (!steps.length) throw new Error('Add your clock-in first.');
   if (steps[steps.length - 1].act !== 'clockout') throw new Error('End the day with Clock out.');
   for (let i = 1; i < steps.length; i++) if (steps[i].time <= steps[i - 1].time) throw new Error(`Step ${i + 1} must be after step ${i}. Check the times.`);
@@ -87,6 +97,7 @@ export function toEntries(steps: Step[]): Entry[] {
     const a = activities[s.act], drive = s.act === 'drive';
     out.push({ id: s.id, status: a.status, start: s.time, end: n.time, from: s.place.trim(), to: drive ? n.place.trim() : '', miles: drive ? s.miles ?? estimateMiles(s.place, n.place) : null, note: a.note, partial: false, source: 'manual' });
   }
+  if (tag && out.length && !out[0].note.includes(tag)) out[0].note += tag;
   return out;
 }
 

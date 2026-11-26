@@ -4,7 +4,7 @@ import { Modal, Field } from './ui';
 import { HosChart } from './hos-chart';
 import { cityNames } from '../lib/simple-day';
 import { bounds, dayKey, epoch, type Entry, type Log } from '../lib/log';
-import { activities, activityOf, nextSteps, estimateMiles, hosClocks, toEntries, toSteps, stepTime, hhmm, hotel, PRESTON, type Activity, type Step } from '../lib/hos';
+import { activities, activityOf, nextSteps, estimateMiles, hosClocks, toEntries, toSteps, stepTime, hhmm, hotel, PRESTON, LD_MARK, type Activity, type Step } from '../lib/hos';
 
 type Act = Activity | 'clockout';
 const H = 3600000;
@@ -23,9 +23,9 @@ function stepLabel(act: Act, now: Activity | null) {
   return activities[act].label;
 }
 
-/** Where the driver ended the last working day before `day`, for suggesting this morning's hotel. */
+/** Where the driver ended yesterday, for suggesting this morning's hotel. Older days are ignored. */
 function lastPlace(entries: Entry[], before: number) {
-  const prev = entries.filter(e => e.end !== null && e.end <= before).sort((a, b) => b.end! - a.end!)[0];
+  const prev = entries.filter(e => e.end !== null && e.end <= before && e.end > before - 24 * H).sort((a, b) => b.end! - a.end!)[0];
   return prev ? (prev.to || prev.from).trim() : '';
 }
 
@@ -95,10 +95,10 @@ export function LdPage({ log, now, busy, loaded, onStep, onEdit, onFill, onEstim
   const steps = nextSteps(current);
   return <section className="paper ld-live">
     <div className="ld-head"><div><span className="eyebrow">LD · {dayLabel(today, { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()}</span><h2>{active ? activities[current!].note : 'Off the clock'}</h2>
-      <p className="subtle">{active ? `Since ${clock(active.start)}${active.from ? ` · ${shortPlace(active.from)}` : ''}` : prev ? `Last stop: ${shortPlace(prev)}` : 'Tap Clock in when you start your day.'}</p></div>
+      <p className="subtle">{active ? `Since ${clock(active.start)}${active.from ? ` · ${shortPlace(active.from)}` : ''}` : 'Nothing logged yet today. Tap Clock in when you start your day.'}</p></div>
       <span className={`status-pill s${active ? ['Off duty', 'Sleeper berth', 'Driving', 'On duty'].indexOf(active.status) : 0}`}>{active?.status ?? 'Off duty'}</span></div>
     <div className="step-buttons">{steps.map((s, i) => <button key={s} className={i === 0 && current !== 'drive' && current !== 'riding' ? 'primary' : 'secondary'} disabled={!loaded || busy} onClick={() => setStep(s)}>{stepLabel(s, current)}</button>)}</div>
-    <Clocks entries={all} now={now} onClock={!!active && active.status !== 'Off duty'} />
+    {(active || all.some(e => e.start >= t0)) && <Clocks entries={all} now={now} onClock={!!active && active.status !== 'Off duty'} />}
     <HosChart entries={all} day={today} zone={zone} now={now} onPick={e => e.id !== active?.id && onEdit(e)} />
     <div className="ld-actions">
       <button className="secondary" disabled={!loaded} onClick={() => setInspect(true)}><ShieldCheck size={18} /> Inspection view</button>
@@ -140,7 +140,7 @@ export function InspectionView({ log, now, onClose }: { log: Log; now: number; o
 type Row = { id: string; time: string; act: Act; place: string; miles: string };
 
 /** Fill in a day after the fact, or fix one: a list of status changes from clock in to clock out. */
-export function TimelineEditor({ day, zone, busy, now, existing, onClose, onSave }: { now: number; day: string; zone: string; busy: boolean; existing: (d: string) => Entry[]; onClose: () => void; onSave: (entries: Entry[], date: string, replace: boolean) => Promise<void> }) {
+export function TimelineEditor({ day, zone, busy, now, ld, existing, onClose, onSave }: { ld?: boolean; now: number; day: string; zone: string; busy: boolean; existing: (d: string) => Entry[]; onClose: () => void; onSave: (entries: Entry[], date: string, replace: boolean) => Promise<void> }) {
   const [prior] = useState(() => existing(day).filter(e => e.end !== null));
   const [date, setDate] = useState(day), [error, setError] = useState('');
   const [rows, setRows] = useState<Row[]>(() => prior.length
@@ -157,7 +157,7 @@ export function TimelineEditor({ day, zone, busy, now, existing, onClose, onSave
       if (!/^\d\d:\d\d$/.test(r.time)) throw new Error('Enter a time for every step.');
       steps.push({ id: r.id, time: stepTime(date, r.time, zone, steps[steps.length - 1]?.time), act: r.act, place: r.place, miles: r.miles === '' ? null : Number(r.miles) });
     }
-    entries = toEntries(steps);
+    entries = toEntries(steps, ld || prior[0]?.note.includes(LD_MARK) ? LD_MARK : '');
   } catch (e) { problem = e instanceof Error ? e.message : 'Check the steps.'; }
   const last = rows[rows.length - 1]?.act;
   const lastAct = last && last !== 'clockout' ? last : null;

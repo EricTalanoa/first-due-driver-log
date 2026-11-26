@@ -124,3 +124,10 @@ dialog.wide{width:900px}
 .place-custom{flex-wrap:wrap}
 }
 @media print{.hos svg{min-width:0}.hos-scroll{overflow:visible}.inspect-day{break-inside:avoid}}
+
+/* History: LD trips grouped in red */
+.ld-trip{margin:0 0 12px;padding:10px 10px 0;border:2px solid #b52127;border-radius:14px;background:#fdf3f3}
+.ld-trip-head{display:flex;align-items:center;gap:10px;margin:0 4px 10px;font-size:14px;color:#9a1e24}
+.ld-trip-head span:last-child{margin-left:auto;font-variant-numeric:tabular-nums}
+.ld-badge{background:#b52127;color:#fff;font-size:12px;font-weight:800;letter-spacing:.08em;padding:3px 8px;border-radius:6px}
+.ld-trip .history-row{border-color:#ecc4c6}
