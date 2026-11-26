@@ -4,12 +4,6 @@
 <dict>
 	<key>CFBundleDisplayName</key>
 	<string>Driver Log</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Driver Log uses your location while you are driving to measure trip miles and note where each drive starts and ends.</string>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>location</string>
-	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

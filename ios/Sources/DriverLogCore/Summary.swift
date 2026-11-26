@@ -10,6 +10,8 @@ public struct DaySummary: Identifiable, Equatable, Sendable {
     public let worked: TimeInterval
     public let miles: Double
     public let open: Bool
+    /// Long distance (see `isLdDay`): outlined in red in History.
+    public let ld: Bool
 }
 
 public struct MonthSummary: Identifiable, Equatable, Sendable {
@@ -34,13 +36,33 @@ public func history(_ log: Log, now: Date = Date()) -> [MonthSummary] {
         return DaySummary(day: day, first: first, last: last, lunch: lunch,
                           worked: work.reduce(0) { $0 + ($1.end ?? now).timeIntervalSince($1.start) },
                           miles: es.filter { $0.status == .driving }.reduce(0) { $0 + ($1.miles ?? 0) },
-                          open: es.contains { $0.id == log.active?.id })
+                          open: es.contains { $0.id == log.active?.id }, ld: isLdDay(es))
     }
     let byMonth = Dictionary(grouping: days) { String($0.day.prefix(7)) }
     return byMonth.keys.sorted(by: >).map { m in
         let ds = byMonth[m]!.sorted { $0.day > $1.day }
         return MonthSummary(month: m, worked: ds.reduce(0) { $0 + $1.worked }, miles: ds.reduce(0) { $0 + $1.miles }, days: ds)
     }
+}
+
+/// History rows within a month: single days, or back-to-back LD days grouped as one trip (newest first).
+public struct DayGroup: Identifiable, Equatable, Sendable {
+    public var id: String { days[0].day }
+    public let ld: Bool
+    public var days: [DaySummary]
+    public var miles: Double { days.reduce(0) { $0 + $1.miles } }
+}
+
+public func groupTrips(_ days: [DaySummary]) -> [DayGroup] {
+    var out: [DayGroup] = []
+    for d in days {
+        if d.ld, let last = out.last, last.ld, Clock.shift(d.day, by: 1) == last.days[last.days.count - 1].day {
+            out[out.count - 1].days.append(d)
+        } else {
+            out.append(DayGroup(ld: d.ld, days: [d]))
+        }
+    }
+    return out
 }
 
 /// Entries that overlap a home-terminal day, oldest first, plus per-status totals clipped to the day.

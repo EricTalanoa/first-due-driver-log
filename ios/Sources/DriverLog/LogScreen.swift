@@ -2,19 +2,37 @@
 import DriverLogCore
 import SwiftUI
 
-/// Sheets the Log and History screens can open.
+/// Sheets the Today, LD and History screens can open.
 enum Sheet: Identifiable {
-    case simple, ld, edit(Entry), settings
+    case simple, ld, edit(Entry), settings, timeline(String, ld: Bool), inspect, step(Step)
     var id: String {
         switch self {
         case .simple: return "simple"
         case .ld: return "ld"
         case .edit(let e): return "edit-\(e.id)"
         case .settings: return "settings"
+        case .timeline(let d, let ld): return "timeline-\(d)-\(ld)"
+        case .inspect: return "inspect"
+        case .step(let s): return "step-\(s)"
+        }
+    }
+
+    @MainActor @ViewBuilder
+    func view(_ model: AppModel) -> some View {
+        let fallback = model.day.isEmpty ? model.today : model.day
+        switch self {
+        case .simple: SimpleDayEditor(day: fallback)
+        case .ld: LdDayEditor(day: fallback)
+        case .edit(let e): EntryEditor(entry: e)
+        case .settings: SettingsView()
+        case .timeline(let d, let ld): TimelineEditor(day: d, ld: ld)
+        case .inspect: InspectionView()
+        case .step(let s): StepSheet(step: s)
         }
     }
 }
 
+/// The Today tab: Add entry, then the selected day's DOT chart, totals and entries.
 struct LogScreen: View {
     @EnvironmentObject var model: AppModel
     @State private var sheet: Sheet?
@@ -41,9 +59,7 @@ struct LogScreen: View {
                             .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Brand.red.opacity(0.45), style: StrokeStyle(lineWidth: 2, dash: [6, 4])))
                     }
                     .disabled(!model.loaded)
-                    DriveCard(review: { sheet = .edit($0) })
-                    StatusPanel()
-                    DailyLog(sheet: $sheet, confirmClear: $confirmClear, choosing: $choosing)
+                    DailyLog(sheet: $sheet, confirmClear: $confirmClear)
                 }
                 .padding(16)
             }
@@ -53,29 +69,22 @@ struct LogScreen: View {
         }
         .confirmationDialog("Add to your log", isPresented: $choosing, titleVisibility: .visible) {
             Button("Simple day") { sheet = .simple }
+            Button("Fill in a day step by step") { sheet = .timeline(model.day.isEmpty ? model.today : model.day, ld: false) }
             Button("Advanced entry") { sheet = .edit(newManualEntry()) }
-            Button("LD day") { sheet = .ld }
         } message: {
-            Text("Simple day fills in the whole day from your office, cities, clock times and lunch. Advanced adds one duty period with exact times. LD day is a long-distance day that starts or ends at a hotel.")
+            Text("Simple day is for local jobs: cities, clock times and lunch, and the chart is estimated. Step by step lists each drive, stop and break with its time and place. Advanced adds one duty period.")
         }
         .alert("Clear this day?", isPresented: $confirmClear) {
             Button("Clear day", role: .destructive) { Task { try? await model.clear(day: model.day) } }
         } message: {
-            Text("This deletes all \(model.entries(startingOn: model.day).count) entries that start on \(Clock.label(model.day, "EEEE, MMMM d")). A drive you are recording now is kept.")
+            Text("This deletes all \(model.entries(startingOn: model.day).count) entries that start on \(Clock.label(model.day, "EEEE, MMMM d")). Anything you are recording now is kept.")
         }
-        .sheet(item: $sheet) { s in
-            switch s {
-            case .simple: SimpleDayEditor(day: model.day.isEmpty ? model.today : model.day)
-            case .ld: LdDayEditor(day: model.day.isEmpty ? model.today : model.day)
-            case .edit(let e): EntryEditor(entry: e)
-            case .settings: SettingsView()
-            }
-        }
+        .sheet(item: $sheet) { $0.view(model) }
         .onAppear {
             switch LaunchOptions.screen {
             case "simple": sheet = .simple
-            case "ld": sheet = .ld
             case "settings": sheet = .settings
+            case "timeline": sheet = .timeline(Clock.shift(model.today, by: -1), ld: false)
             default: break
             }
         }
@@ -114,164 +123,23 @@ struct ErrorBanner: View {
     }
 }
 
-// MARK: Drive card
-
-struct DriveCard: View {
-    @EnvironmentObject var model: AppModel
-    let review: (Entry) -> Void
-
-    var body: some View {
-        let active = model.active
-        let driving = model.driving
-        let day = DayView(log: model.log, day: model.today, now: model.now)
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Eyebrow(driving ? "Drive in progress" : model.onClock ? "On the clock" : "Off the clock", color: .white)
-                Spacer()
-                Text(active?.status.rawValue ?? "Not recording").font(.caption).foregroundStyle(.white)
-                    .padding(.horizontal, 10).padding(.vertical, 5).overlay(Capsule().stroke(Brand.cardLine))
-            }
-            HStack(spacing: 10) {
-                ClockButton(title: active != nil && !model.onClock ? "Back on duty" : "Clock in", icon: "arrow.right.to.line", primary: !model.onClock) {
-                    Task { await model.setStatus(.onDuty) }
-                }
-                .disabled(!model.loaded || model.busy || model.onClock)
-                ClockButton(title: "Clock out", icon: "rectangle.portrait.and.arrow.right", primary: false) {
-                    Task { await model.clockOut() }
-                }
-                .disabled(!model.loaded || model.busy || active == nil || driving)
-            }
-            HStack(alignment: .top) {
-                Metric(label: driving ? "Drive time" : "Worked today",
-                       value: driving ? duration(model.now.timeIntervalSince(active!.start)) : duration((day.totals[.onDuty] ?? 0) + (day.totals[.driving] ?? 0)))
-                Spacer()
-                Metric(label: driving ? "GPS miles · estimate" : "Miles today",
-                       value: driving ? milesText(model.meter?.miles ?? active?.miles ?? 0) : milesText(day.miles), unit: "mi")
-            }
-            if !driving, let clockedIn = clockedInAt(day) {
-                Text("Clocked in at \(model.clock.time(clockedIn))").font(.footnote).foregroundStyle(Brand.onDark)
-            }
-            Button {
-                Task {
-                    if let ended = await model.setStatus(driving ? .onDuty : .driving) { review(ended) }
-                }
-            } label: {
-                Label(driving ? "End driving" : "Start driving", systemImage: driving ? "stop.fill" : "play.fill")
-            }
-            .buttonStyle(PrimaryButtonStyle())
-            .disabled(!model.loaded || model.busy)
-            if driving {
-                Label(model.gpsMessage, systemImage: "location.fill").font(.footnote).foregroundStyle(Brand.onDark)
-                    .frame(maxWidth: .infinity)
-            } else if active != nil {
-                Text("Clock out stops recording for the day.").font(.footnote).foregroundStyle(Brand.onDark).frame(maxWidth: .infinity)
-            }
-        }
-        .padding(22)
-        .background(Brand.card, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(alignment: .top) { UnevenRoundedRectangle(topLeadingRadius: 16, topTrailingRadius: 16).fill(Brand.brightRed).frame(height: 5) }
-    }
-
-    private func clockedInAt(_ day: DayView) -> Date? {
-        guard model.active != nil else { return nil }
-        return day.rows.filter(\.isWork).map(\.start).min()
-    }
-}
-
-struct ClockButton: View {
-    let title: String
-    let icon: String
-    let primary: Bool
-    let action: () -> Void
-    @Environment(\.isEnabled) private var enabled
-
-    var body: some View {
-        Button(action: action) {
-            Label(title, systemImage: icon).font(.headline).lineLimit(1).minimumScaleFactor(0.8)
-                .foregroundStyle(primary && enabled ? Brand.card : .white)
-                .frame(maxWidth: .infinity, minHeight: 56)
-                .background(primary && enabled ? Color.white : Brand.cardRaised, in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(primary && enabled ? .clear : Brand.cardLine))
-                .opacity(enabled ? 1 : 0.4)
-        }
-    }
-}
-
-struct Metric: View {
-    let label: String
-    let value: String
-    var unit: String?
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label).font(.footnote).foregroundStyle(Brand.onDark)
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(value).font(.system(size: 30, weight: .bold)).monospacedDigit().foregroundStyle(.white)
-                if let unit { Text(unit).foregroundStyle(.white) }
-            }
-        }
-    }
-}
-
-// MARK: Set status
-
-struct StatusPanel: View {
-    @EnvironmentObject var model: AppModel
-    private let choices: [Status] = [.onDuty, .offDuty, .sleeper]
-
-    private func detail(_ s: Status) -> String {
-        switch s {
-        case .onDuty: return "Loading, unloading, other work"
-        case .offDuty: return "Break or finished for the day"
-        default: return "Resting in the sleeper"
-        }
-    }
-
-    var body: some View {
-        Paper {
-            Text("Set status").font(.title2.weight(.bold)).foregroundStyle(Brand.ink)
-            ForEach(choices) { status in
-                let selected = model.active?.status == status
-                Button { Task { await model.setStatus(status) } } label: {
-                    HStack(spacing: 14) {
-                        Image(systemName: Brand.icon(for: status)).font(.title3).frame(width: 26)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(status.rawValue).font(.headline)
-                            Text(detail(status)).font(.footnote).foregroundStyle(Brand.muted)
-                        }
-                        Spacer()
-                        if selected { Circle().fill(Brand.red).frame(width: 8, height: 8) }
-                    }
-                    .foregroundStyle(selected ? Brand.darkRed : Brand.ink)
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(selected ? Color(red: 0.99, green: 0.94, blue: 0.94) : .white, in: RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(selected ? Brand.red : Brand.paperLine))
-                }
-                .disabled(!model.loaded || model.busy || model.driving)
-            }
-            if model.driving {
-                Text("End your drive to change duty status.").font(.footnote).foregroundStyle(Brand.muted)
-            }
-        }
-    }
-}
-
 // MARK: Daily log
 
 struct DailyLog: View {
     @EnvironmentObject var model: AppModel
     @Binding var sheet: Sheet?
     @Binding var confirmClear: Bool
-    @Binding var choosing: Bool
 
     var body: some View {
         let day = model.day.isEmpty ? model.today : model.day
         let view = DayView(log: model.log, day: day, now: model.now)
         let zone = model.log.profile.timeZone
-        let editable: Sheet? = readSimpleDay(model.entries(startingOn: day), zone: zone) != nil ? Sheet.simple
-            : readLdDay(model.entries(startingOn: day), zone: zone) != nil ? Sheet.ld : nil
+        let started = model.entries(startingOn: day)
+        let editable: Sheet? = readSimpleDay(started, zone: zone) != nil ? .simple
+            : readLdDay(started, zone: zone) != nil ? .ld
+            : !started.isEmpty && !started.contains { $0.id == model.active?.id } ? .timeline(day, ld: false) : nil
         Paper {
-            Text("Daily log").font(.title2.weight(.bold)).foregroundStyle(Brand.ink)
+            Text(day == model.today ? "Today" : "Daily log").font(.title2.weight(.bold)).foregroundStyle(Brand.ink)
             HStack {
                 Button { model.day = Clock.shift(day, by: -1) } label: { Image(systemName: "chevron.left") }.accessibilityLabel("Previous day")
                 DatePicker("Log date", selection: dateBinding(day), displayedComponents: .date).labelsHidden()
@@ -292,18 +160,20 @@ struct DailyLog: View {
                 Stat(label: "Completed-trip miles", value: "\(milesText(view.miles)) mi\(view.needsCheck ? " · check" : "")")
             }
             Divider()
+            HosChartView(entries: model.log.all, day: day) { e in if e.id != model.active?.id { sheet = .edit(e) } }
+            Divider()
             HStack {
                 Text("Duty periods & trips").font(.headline).foregroundStyle(Brand.ink)
                 Spacer()
                 Button(role: .destructive) { confirmClear = true } label: { Label("Clear day", systemImage: "trash") }
                     .font(.footnote.weight(.semibold))
-                    .disabled(model.busy || model.entries(startingOn: day).isEmpty)
+                    .disabled(model.busy || started.isEmpty)
             }
             if view.rows.isEmpty {
                 VStack(spacing: 6) {
                     Image(systemName: "truck.box").font(.title).foregroundStyle(Brand.muted)
                     Text("No entries for this day").font(.headline)
-                    Text("Start recording above, or add a past trip.").font(.footnote).foregroundStyle(Brand.muted)
+                    Text("Use Add entry for a local day, or the LD tab on a long-distance day.").font(.footnote).foregroundStyle(Brand.muted).multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity).padding(.vertical, 20)
             } else {
@@ -359,13 +229,13 @@ struct EntryCard: View {
                     Label(entry.status == .driving || !entry.to.isEmpty ? "\(entry.from.isEmpty ? "Start not entered" : entry.from) → \(entry.to.isEmpty ? "Destination not entered" : entry.to)" : entry.from,
                           systemImage: "mappin.and.ellipse").font(.subheadline).foregroundStyle(Brand.ink)
                 }
-                if entry.status == .driving {
-                    Text(entry.miles.map { "\(milesText($0)) mi\(entry.source == .gps ? " · GPS estimate" : "")" } ?? "Distance needed")
+                if entry.status == .driving && !isActive {
+                    Text(entry.miles.map { "\(milesText($0)) mi" } ?? "Distance needed")
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(entry.miles == nil || entry.partial ? Brand.warn : Brand.ink)
                     + Text(entry.partial ? " · check distance" : "").font(.subheadline).foregroundColor(Brand.warn)
                 }
-                if !entry.note.isEmpty { Text(entry.note).font(.footnote).foregroundStyle(Brand.muted) }
+                if !entry.note.isEmpty { Text(entry.note.replacingOccurrences(of: Places.ldMark, with: "")).font(.footnote).foregroundStyle(Brand.muted) }
             }
             if !isActive {
                 Button(action: edit) { Image(systemName: "pencil").font(.body.weight(.semibold)) }

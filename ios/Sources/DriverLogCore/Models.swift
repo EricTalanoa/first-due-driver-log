@@ -65,9 +65,9 @@ public struct Entry: Codable, Equatable, Identifiable, Sendable {
         self.commodity = commodity
     }
 
-    /// A fresh period starting now (or at `start`). Drives are GPS-measured until edited.
+    /// A fresh period starting now (or at `start`).
     public static func starting(_ status: Status, at start: Date = Date()) -> Entry {
-        Entry(status: status, start: start, partial: status == .driving, source: status == .driving ? .gps : .manual)
+        Entry(status: status, start: start)
     }
 
     public var isWork: Bool { status == .onDuty || status == .driving }

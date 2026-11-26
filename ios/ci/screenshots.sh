@@ -17,8 +17,6 @@ xcrun simctl boot "$UDID" || true
 xcrun simctl bootstatus "$UDID" -b
 xcrun simctl status_bar "$UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --cellularBars 4 || true
 xcrun simctl install "$UDID" "$APP"
-# Pre-allow location so the permission prompt does not cover the screenshots.
-xcrun simctl privacy "$UDID" grant location com.erictalanoa.DriverLogHost || true
 mkdir -p ci-shots
 shoot() { # name, launch args...
   local name=$1; shift
@@ -28,11 +26,13 @@ shoot() { # name, launch args...
   xcrun simctl io "$UDID" screenshot "ci-shots/$name.png" >/dev/null
 }
 shoot 01-sign-in
-shoot 02-log-off-clock -demo off
-shoot 03-log-on-clock -demo clocked
-shoot 04-log-driving -demo driving
-shoot 05-daily-log -demo clocked -screen daily
-shoot 06-history -demo off -screen history
-shoot 07-simple-day -demo off -screen simple
-shoot 08-settings -demo off -screen settings
+shoot 02-today -demo ld
+shoot 03-ld-off-clock -demo off -screen ld
+shoot 04-ld-driving -demo ld -screen ld
+shoot 05-ld-step -demo ld -screen step
+shoot 06-inspection -demo ld -screen inspect
+shoot 07-history -demo ld -screen history
+shoot 08-fill-in-day -demo ld -screen timeline
+shoot 09-simple-day -demo off -screen simple
+shoot 10-settings -demo off -screen settings
 ls -la ci-shots
