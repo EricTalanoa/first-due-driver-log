@@ -9,4 +9,5 @@ d=json.load(sys.stdin)["devices"]
 c=[x for k,v in d.items() if "iOS" in k for x in v if x["name"].startswith("iPhone") and "Pro Max" not in x["name"] and "Plus" not in x["name"]]
 print(sorted(c,key=lambda x:x["name"])[-1]["udid"])')
 xcodebuild test -project DriverLogHost.xcodeproj -scheme DriverLogHost -sdk iphonesimulator \
-  -destination "id=$UDID" -derivedDataPath ../../dd-tests -skipPackagePluginValidation -skipMacroValidation -quiet
+  -destination "id=$UDID" -derivedDataPath ../../dd-tests -skipPackagePluginValidation -skipMacroValidation \
+  -resultBundlePath ../../ui-tests.xcresult 2>&1 | grep -E "Test Case|error:|XCTAssert|Executed|TEST (SUCCEEDED|FAILED)" ; exit ${PIPESTATUS[0]}

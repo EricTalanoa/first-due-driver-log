@@ -20,12 +20,12 @@ final class DriverLogUITests: XCTestCase {
     func testClockInFromOffTheClock() {
         let app = launch("off")
         tab(app, "LD")
-        XCTAssertTrue(app.staticTexts["Off the clock"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Off the clock"].waitForExistence(timeout: 10), "LD tab starts off the clock")
         app.buttons["Clock in"].tap()
-        XCTAssertTrue(app.buttons["Preston office"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Preston office"].waitForExistence(timeout: 5), "Preston office option. Buttons: \(app.buttons.allElementsBoundByIndex.map(\.label))")
         app.buttons["Save"].tap()
-        XCTAssertTrue(app.staticTexts["Pre-trip inspection"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["Driving left"].exists, "hours clocks show once clocked in")
+        XCTAssertTrue(app.staticTexts["Pre-trip inspection"].waitForExistence(timeout: 10), "heading after clock in. Texts: \(app.staticTexts.allElementsBoundByIndex.prefix(30).map(\.label))")
+        XCTAssertTrue(app.staticTexts["Driving left"].waitForExistence(timeout: 5), "hours clocks show once clocked in")
     }
 
     func testFuelStopWithOtherPlace() {
@@ -45,15 +45,15 @@ final class DriverLogUITests: XCTestCase {
     func testClearDayResetsTheLdTab() {
         let app = launch("ld")
         tab(app, "LD")
-        XCTAssertTrue(app.staticTexts["Driving"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Driving"].firstMatch.waitForExistence(timeout: 10), "LD tab shows the drive")
         let clear = app.buttons["ld-clear-day"]
-        app.swipeUp()
-        app.swipeUp()
+        XCTAssertTrue(clear.waitForExistence(timeout: 5), "Clear day button. Buttons: \(app.buttons.allElementsBoundByIndex.map(\.label))")
+        for _ in 0..<4 where !clear.isHittable { app.swipeUp() }
         clear.tap()
         let confirm = app.alerts.buttons["Clear day"]
-        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "confirmation. Alerts: \(app.alerts.allElementsBoundByIndex.map(\.label))")
         confirm.tap()
-        XCTAssertTrue(app.staticTexts["Off the clock"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Off the clock"].waitForExistence(timeout: 10), "reset after clearing. Texts: \(app.staticTexts.allElementsBoundByIndex.prefix(30).map(\.label))")
     }
 
     func testInspectionView() {
