@@ -129,6 +129,34 @@ export function stepAt(time: string, zone: string, now: number, after?: number) 
   return at;
 }
 
+/**
+ * The work shift that a day's editing covers: the day's own entries, carried on past midnight while the work
+ * continues (each next entry starts within an hour of the last). Entries at the start of the day that carry on
+ * a shift from the day before belong to that day; if that's all the day has, that earlier shift is returned.
+ * Open entries are left out.
+ */
+export function shiftOf(entries: Entry[], day: string, zone: string): { day: string; entries: Entry[] } {
+  const closed = entries.filter(e => e.end !== null).sort((a, b) => a.start - b.start);
+  const joins = (a: Entry, b: Entry) => b.start >= a.end! && b.start - a.end! <= 3600000;
+  const [s, e] = bounds(day, zone);
+  const inDay = closed.filter(x => x.start >= s && x.start < e);
+  if (!inDay.length) return { day, entries: [] };
+  // Entries continuing a shift that began before midnight.
+  let tail = 0;
+  for (const x of inDay) {
+    const prev = closed[closed.indexOf(x) - 1];
+    if (prev && joins(prev, x) && (prev.start < s || tail > 0)) tail++; else break;
+  }
+  const own = inDay.slice(tail);
+  if (!own.length) {
+    let head = inDay[0];
+    for (let k = closed.indexOf(head) - 1; k >= 0 && joins(closed[k], head); k--) head = closed[k];
+    return shiftOf(entries, dayKey(head.start, zone), zone);
+  }
+  for (let k = closed.indexOf(own[own.length - 1]) + 1; k < closed.length && closed[k].start >= e && joins(own[own.length - 1], closed[k]); k++) own.push(closed[k]);
+  return { day, entries: own };
+}
+
 // ---- The 24-hour chart ----
 
 export type Segment = { status: Status; start: number; end: number; filled: boolean; entry?: Entry };

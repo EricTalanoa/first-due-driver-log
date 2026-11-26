@@ -62,6 +62,7 @@ struct LdScreen: View {
                         Divider()
                         Button(role: .destructive) { confirmClear = true } label: { Label("Clear day", systemImage: "trash") }
                             .font(.subheadline.weight(.semibold))
+                            .accessibilityIdentifier("ld-clear-day")
                             .disabled(!model.loaded || model.busy || !loggedToday)
                     }
                 }
@@ -512,8 +513,10 @@ struct TimelineEditor: View {
     private func setUp() {
         guard !ready else { return }
         ready = true
-        date = day
-        prior = model.entries(startingOn: day).filter { $0.end != nil }
+        // Editing works on the whole shift, which can run past midnight.
+        let shift = shiftOf(model.log.entries, day: day, clock: model.clock)
+        date = shift.day
+        prior = shift.entries
         let clock = model.clock
         rows = prior.isEmpty
             ? [Row(time: "07:00", step: .act(.pretrip), place: Places.preston, miles: "")]
@@ -551,7 +554,7 @@ struct TimelineEditor: View {
             if let d = entries.first(where: { $0.status == .driving && $0.miles == nil }) {
                 throw LogError("Couldn’t estimate the drive from “\(d.from)” to “\(d.to)”. Enter its miles.")
             }
-            try await model.saveSimpleDay(entries, date: date, replace: !prior.isEmpty || !model.entries(startingOn: date).isEmpty)
+            try await model.saveSimpleDay(entries, date: date, replace: prior.isEmpty && !model.entries(startingOn: date).isEmpty, replacing: prior.map(\.id))
             dismiss()
         } catch {
             self.error = error.localizedDescription

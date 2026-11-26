@@ -47,3 +47,7 @@ next-env.d.ts
 /work/
 /netlify-dist/
 /.netlify/
+
+# Browser test output
+test-results/
+playwright-report/

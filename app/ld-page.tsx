@@ -142,8 +142,9 @@ export function InspectionView({ log, now, onClose }: { log: Log; now: number; o
 type Row = { id: string; time: string; act: Act; place: string; miles: string };
 
 /** Fill in a day after the fact, or fix one: a list of status changes from clock in to clock out. */
-export function TimelineEditor({ day, zone, busy, now, ld, existing, onClose, onSave }: { ld?: boolean; now: number; day: string; zone: string; busy: boolean; existing: (d: string) => Entry[]; onClose: () => void; onSave: (entries: Entry[], date: string, replace: boolean) => Promise<void> }) {
-  const [prior] = useState(() => existing(day).filter(e => e.end !== null));
+export function TimelineEditor({ day, zone, busy, now, ld, existing, shift, onClose, onSave }: { ld?: boolean; now: number; day: string; zone: string; busy: boolean; existing: (d: string) => Entry[]; shift: (d: string) => Entry[]; onClose: () => void; onSave: (entries: Entry[], date: string, replace: boolean, replacing?: string[]) => Promise<void> }) {
+  // Editing works on the whole shift, which can run past midnight.
+  const [prior] = useState(() => shift(day));
   const [date, setDate] = useState(day), [error, setError] = useState('');
   const [rows, setRows] = useState<Row[]>(() => prior.length
     ? toSteps(prior).map(s => ({ id: s.id, time: hhmm(s.time, zone), act: s.act, place: s.place, miles: s.miles?.toString() ?? '' }))
@@ -176,7 +177,7 @@ export function TimelineEditor({ day, zone, busy, now, ld, existing, onClose, on
       if (blank >= 0) throw new Error(`Step ${blank + 1} needs a place. The log needs the city at every change.`);
       const unknown = entries.find(x => x.status === 'Driving' && x.miles === null);
       if (unknown) throw new Error(`Couldn't estimate the drive from “${unknown.from}” to “${unknown.to}”. Enter its miles.`);
-      await onSave(entries, date, editing || others.length > 0);
+      await onSave(entries, date, !editing && others.length > 0, prior.map(e => e.id));
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not save this day.'); }
   }
   return <Modal title={editing ? 'Fix this day' : 'Fill in a day'} onClose={onClose} wide><form onSubmit={submit} className="simple-day timeline">

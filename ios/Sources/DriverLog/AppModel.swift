@@ -101,6 +101,8 @@ final class AppModel: ObservableObject {
             if let message { show(message) }
         } catch {
             if !isCancellation(error) { self.error = error.localizedDescription }
+            // The saved log moved on without this phone (changed on the website): fetch it again.
+            if error is StaleLogError { Task { await self.load() } }
             throw error
         }
     }
@@ -175,8 +177,10 @@ final class AppModel: ObservableObject {
         try await save(next, message: "Cleared \(n) \(n == 1 ? "entry" : "entries")")
     }
 
-    func saveSimpleDay(_ entries: [Entry], date: String, replace: Bool) async throws {
-        let old = replace ? Set(self.entries(startingOn: date).map(\.id)) : []
+    /// Saves a planned or edited day. `replace` drops the date's entries; `replacing` drops these ids too
+    /// (an edited shift, which can run past midnight).
+    func saveSimpleDay(_ entries: [Entry], date: String, replace: Bool, replacing: [String] = []) async throws {
+        let old = Set((replace ? self.entries(startingOn: date).map(\.id) : []) + replacing)
         let keep = log.entries.filter { !old.contains($0.id) }
         let clash = (keep + (log.active.map { [$0] } ?? [])).filter { k in entries.contains { overlaps(k, $0) } }
         if !clash.isEmpty {

@@ -24,6 +24,9 @@ function fromRow(r: Row): Entry {
   return e;
 }
 
+/** The server's log no longer matches this page's (it was changed on another device or tab). */
+export class StaleLogError extends Error {}
+
 function friendly(error: { code?: string; message: string }) {
   if (error.code === '23P01') return 'Duty periods cannot overlap. Adjust the times first.';
   if (error.code === '42501' || /JWT|not signed in|Sign in/i.test(error.message)) return 'Your sign-in expired. Sign in again; your open form is still here.';
@@ -59,6 +62,8 @@ export async function saveLog(prev: Log, next: Log) {
   const profile: Profile | null = same(prev.profile, next.profile) ? null : next.profile;
   if (!upserts.length && !deletes.length && !profile) return;
   const { error } = await supabase.rpc('save_log', { upserts, deletes, profile });
+  // This page already checked for overlaps, so a clash means the saved log moved on without it.
+  if (error?.code === '23P01') throw new StaleLogError('Your log changed on another device. It has been refreshed: check it, then try again.');
   if (error) throw new Error(friendly(error));
 }
 

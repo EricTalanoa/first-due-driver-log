@@ -72,6 +72,8 @@ xtool dev
 
 **Database changes** go in `supabase/migrations/` and are applied to the Supabase project.
 
+**Tests** run on every pull request; see [`TESTING.md`](TESTING.md) for what they cover and how to run them (`npm test`, `npm run test:e2e`).
+
 ## Roadmap
 
 - [x] Simple day with multiple jobs, Edit day, Clear day; better GPS on the web ([#10](https://github.com/EricTalanoa/first-due-driver-log/pull/10))

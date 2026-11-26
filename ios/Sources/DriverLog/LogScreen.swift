@@ -137,7 +137,7 @@ struct DailyLog: View {
         let started = model.entries(startingOn: day)
         let editable: Sheet? = readSimpleDay(started, zone: zone) != nil ? .simple
             : readLdDay(started, zone: zone) != nil ? .ld
-            : !started.isEmpty && !started.contains { $0.id == model.active?.id } ? .timeline(day, ld: false) : nil
+            : !shiftOf(model.log.entries, day: day, clock: model.clock).entries.isEmpty ? .timeline(day, ld: false) : nil
         Paper {
             Text(day == model.today ? "Today" : "Daily log").font(.title2.weight(.bold)).foregroundStyle(Brand.ink)
             HStack {

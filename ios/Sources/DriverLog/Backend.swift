@@ -104,7 +104,8 @@ final class SupabaseBackend: Backend {
     private func friendly(_ error: Error) -> Error {
         if isCancellation(error) { return CancellationError() }
         if let e = error as? PostgrestError {
-            if e.code == "23P01" { return LogError("Duty periods cannot overlap. Adjust the times first.") }
+            // The app checks overlaps before saving, so a clash means the log was changed on another device.
+            if e.code == "23P01" { return StaleLogError() }
             if e.code == "42501" || e.code == "PGRST301" { return LogError("Your sign-in expired. Sign in again; your open form is still here.") }
             return LogError(e.message)
         }
@@ -118,6 +119,11 @@ final class SupabaseBackend: Backend {
         if text.localizedCaseInsensitiveContains("canceledLogin") || text.localizedCaseInsensitiveContains("cancel") { return CancellationError() }
         return LogError(error.localizedDescription)
     }
+}
+
+/// The saved log no longer matches this phone's copy (it was changed on the website or another device).
+struct StaleLogError: LocalizedError {
+    var errorDescription: String? { "Your log changed on another device. It has been refreshed: check it, then try again." }
 }
 
 /// In-memory sample data for simulator screenshots: `-demo off|ld`.

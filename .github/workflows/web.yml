@@ -1,0 +1,35 @@
+name: Website
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["ios/**"]
+  pull_request:
+    paths-ignore: ["ios/**"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Logic tests (lib/)
+        run: npm test
+      - name: Build the site
+        run: npm run build:netlify
+      - name: Install the test browser
+        run: npx playwright install --with-deps chromium
+      - name: Browser tests (the built site against a fake Supabase)
+        run: npm run test:e2e
+      - name: Keep failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: test-results/
