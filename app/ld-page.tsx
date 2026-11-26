@@ -4,7 +4,7 @@ import { Modal, Field } from './ui';
 import { HosChart } from './hos-chart';
 import { cityNames } from '../lib/simple-day';
 import { bounds, dayKey, epoch, type Entry, type Log } from '../lib/log';
-import { activities, activityOf, nextSteps, estimateMiles, hosClocks, toEntries, toSteps, stepTime, hhmm, hotel, PRESTON, LD_MARK, type Activity, type Step } from '../lib/hos';
+import { activities, activityOf, nextSteps, estimateMiles, hosClocks, toEntries, toSteps, stepTime, stepAt, hhmm, PRESTON, LD_MARK, type Activity, type Step } from '../lib/hos';
 
 type Act = Activity | 'clockout';
 const H = 3600000;
@@ -29,16 +29,16 @@ function lastPlace(entries: Entry[], before: number) {
   return prev ? (prev.to || prev.from).trim() : '';
 }
 
+/** The suggested places, then Other with a box for any city or address. */
 function PlaceInput({ value, onChange, suggestions, label }: { value: string; onChange: (p: string) => void; suggestions: string[]; label: string }) {
   const chips = [...new Set(suggestions.filter(Boolean))].slice(0, 5);
-  const custom = !chips.includes(value);
-  const [isHotel, setIsHotel] = useState(value.startsWith('Hotel – '));
-  const text = custom ? value.replace(/^Hotel – /, '') : '';
-  const write = (t: string, h = isHotel) => onChange(t.trim() ? (h ? hotel(t) : t) : '');
+  const [other, setOther] = useState(!chips.length || (!!value && !chips.includes(value)));
   return <div className="field place-input"><span>{label}</span>
-    {chips.length > 0 && <div className="place-chips" role="group" aria-label={label}>{chips.map(c => <button type="button" key={c} aria-pressed={value === c} onClick={() => onChange(c)}>{shortPlace(c)}</button>)}</div>}
-    <div className="place-custom"><input list="city-list" autoComplete="off" placeholder={isHotel ? 'Hotel city or address' : chips.length ? 'Or type a city or address' : 'City or address'} value={text} onChange={e => write(e.target.value)} />
-      <label className="hotel-check"><input type="checkbox" checked={isHotel} onChange={e => { setIsHotel(e.target.checked); if (text) write(text, e.target.checked); }} /> Hotel</label></div>
+    <div className="place-options" role="group" aria-label={label}>
+      {chips.map(c => <button type="button" key={c} aria-pressed={!other && value === c} onClick={() => { setOther(false); onChange(c); }}>{shortPlace(c)}</button>)}
+      <button type="button" aria-pressed={other} onClick={() => { if (!other) { setOther(true); onChange(''); } }}>Other</button>
+    </div>
+    {other && <input list="city-list" autoComplete="off" autoFocus={chips.length > 0} placeholder="City, address or hotel" value={value} onChange={e => onChange(e.target.value)} />}
   </div>;
 }
 
@@ -52,9 +52,7 @@ function StepDialog({ act, current, active, zone, suggestions, busy, now: shown,
     e.preventDefault(); setError('');
     const now = Date.now();
     try {
-      let at = epoch(`${dayKey(now, zone)}T${time}`, zone);
-      if (at > now + 60000) at = epoch(`${dayKey(now - 86400000, zone)}T${time}`, zone);
-      if (active && at <= active.start) throw new Error(`That's before your current ${activities[activityOf(active)].label.toLowerCase()} started. Check the time.`);
+      const at = stepAt(time, zone, now, active?.start);
       if (!place.trim()) throw new Error('Enter where you are. The log needs the city at every change.');
       await onSave(at, place.trim(), miles === '' ? null : Number(miles));
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not save.'); }
@@ -81,16 +79,17 @@ function Clocks({ entries, now, onClock }: { entries: Entry[]; now: number; onCl
   </div>;
 }
 
-export function LdPage({ log, now, busy, loaded, onStep, onEdit, onFill, onEstimate }: { log: Log; now: number; busy: boolean; loaded: boolean; onStep: (act: Act, at: number, place: string, miles: number | null) => Promise<void>; onEdit: (e: Entry) => void; onFill: (day: string) => void; onEstimate: () => void }) {
+export function LdPage({ log, now, busy, loaded, onStep, onEdit, onFill, onEstimate, onClear }: { onClear: (day: string) => Promise<void>; log: Log; now: number; busy: boolean; loaded: boolean; onStep: (act: Act, at: number, place: string, miles: number | null) => Promise<void>; onEdit: (e: Entry) => void; onFill: (day: string) => void; onEstimate: () => void }) {
   const zone = log.profile.zone, active = log.active;
   const today = dayKey(now, zone), [t0] = bounds(today, zone);
   const all = [...log.entries, ...(active ? [active] : [])];
   const current = active ? activityOf(active) : null;
-  const [step, setStep] = useState<Act | null>(null), [inspect, setInspect] = useState(false);
+  const [step, setStep] = useState<Act | null>(null), [inspect, setInspect] = useState(false), [clearing, setClearing] = useState(false);
+  const todayCount = log.entries.filter(e => e.start >= t0).length + (active ? 1 : 0);
   const clock = (t: number) => new Intl.DateTimeFormat('en-US', { timeZone: zone, hour: 'numeric', minute: '2-digit' }).format(t);
   const prev = lastPlace(log.entries, active?.start ?? t0);
   const todays = all.filter(e => e.start >= t0).flatMap(e => [e.from, e.to]).filter(Boolean).reverse();
-  const suggestions = !active ? [prev && prev !== PRESTON ? (prev.startsWith('Hotel – ') ? prev : hotel(prev)) : '', PRESTON].filter(Boolean)
+  const suggestions = !active ? [prev && prev !== PRESTON ? prev : '', PRESTON].filter(Boolean)
     : step === 'clockout' || step === 'posttrip' ? [...todays.filter(p => p.startsWith('Hotel – ')), PRESTON, ...todays] : [...todays, PRESTON];
   const steps = nextSteps(current);
   return <section className="paper ld-live">
@@ -105,6 +104,9 @@ export function LdPage({ log, now, busy, loaded, onStep, onEdit, onFill, onEstim
       <button className="text-button" disabled={!loaded} onClick={() => onFill(today)}><ClipboardList size={16} /> Fill in or fix a day</button>
       <button className="text-button" disabled={!loaded} onClick={onEstimate}><Calculator size={16} /> Estimate an LD day</button>
     </div>
+    <div className="ld-clear"><button className="text-button" disabled={!loaded || busy || !todayCount} onClick={() => setClearing(true)}><Trash2 size={16} /> Clear day</button></div>
+    {clearing && <Modal title="Clear today's LD log?" onClose={() => !busy && setClearing(false)}><p>This deletes all {todayCount} {todayCount === 1 ? 'entry' : 'entries'} logged today{active ? `, including what you're recording now (${activities[current!].note.toLowerCase()})` : ''}. The day starts over at Off the clock. It can't be undone.</p>
+      <div className="modal-actions"><button className="secondary" onClick={() => setClearing(false)}>Keep entries</button><button className="danger" disabled={busy} onClick={async () => { try { await onClear(today); setClearing(false); } catch { /* the page shows the error */ } }}>Clear day</button></div></Modal>}
     <datalist id="city-list">{cityNames.map(c => <option key={c} value={c} />)}</datalist>
     {step && <StepDialog act={step} current={current} active={active} zone={zone} suggestions={suggestions} busy={busy} now={now} onClose={() => !busy && setStep(null)} onSave={async (at, place, miles) => { await onStep(step, at, place, miles); setStep(null); }} />}
     {inspect && <InspectionView log={log} now={now} onClose={() => setInspect(false)} />}
