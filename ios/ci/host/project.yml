@@ -8,7 +8,7 @@ targets:
   DriverLogHost:
     type: application
     platform: iOS
-    deploymentTarget: "17.0"
+    deploymentTarget: "18.0"
     sources: [Host.swift]
     dependencies:
       - package: DriverLog
@@ -27,7 +27,7 @@ targets:
   DriverLogUITests:
     type: bundle.ui-testing
     platform: iOS
-    deploymentTarget: "17.0"
+    deploymentTarget: "18.0"
     sources: [UITests]
     dependencies:
       - target: DriverLogHost

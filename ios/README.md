@@ -63,3 +63,15 @@ echo 'export USBMUXD_SOCKET_ADDRESS="$(ip route list default | awk '"'"'{print $
 - Sign in with Apple (required when Google sign-in is offered).
 - A privacy policy page and App Store privacy labels.
 - Release builds through a GitHub Actions macOS job, since xtool can't sign for the App Store yet.
+
+## Releasing to TestFlight and the App Store
+
+1. One-time, in GitHub → Settings → Secrets and variables → Actions, add: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` (the text of the App Store Connect API key's `.p8` file) and `APPLE_TEAM_ID`.
+2. GitHub → Actions → **iOS release (TestFlight)** → Run workflow, with the version (e.g. `1.0`). The build number is the run number, so every upload is new.
+3. After Apple processes it (10–30 minutes), the build is in App Store Connect → TestFlight. Submit it for review from there.
+
+The listing text, privacy answers and review notes are in [`APP_STORE.md`](APP_STORE.md). The App Store build uses `ci/release/project.yml` (same code; bundle ID `XTL-49885974.com.erictalanoa.FirstDueDriverLog`, the same ID xtool uses for the copy on your phone).
+
+## Supported iOS versions
+
+iOS 18 and newer (`deploymentTarget` 18.0). CI runs the simulator tests on the newest iOS and on iOS 18.0, the oldest supported.

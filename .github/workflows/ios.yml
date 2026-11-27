@@ -25,16 +25,35 @@ jobs:
         run: ci/run.sh swift test
       - name: Build app (iOS device SDK, unsigned)
         run: ci/run.sh xcodebuild build -scheme DriverLog -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO -skipPackagePluginValidation -skipMacroValidation
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: App Store archive (dry run, unsigned)
+        run: ci/run.sh ci/release.sh
+        env:
+          DRY_RUN: "1"
 
   ui-tests:
-    runs-on: macos-latest
-    timeout-minutes: 45
+    # The newest iOS on the runner, and the oldest the app supports (deploymentTarget 18.0).
+    # The older iOS runs on the previous macOS image (Xcode 16), where iOS 18 simulators are at home.
+    name: ui-tests (${{ matrix.ios }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ios: newest
+            runner: macos-latest
+          - ios: "18.0"
+            runner: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Simulator tap-through tests
         run: ci/run.sh ci/uitests.sh
+        env:
+          IOS: ${{ matrix.ios != 'newest' && matrix.ios || '' }}
 
   screenshots:
     runs-on: macos-latest

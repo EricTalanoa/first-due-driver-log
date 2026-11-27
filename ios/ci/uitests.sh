@@ -3,11 +3,30 @@
 set -uo pipefail
 cd ci/host
 xcodegen generate --quiet
+if [ -n "${IOS:-}" ]; then
+  # An older iOS (e.g. IOS=18.0, the oldest the app supports): download that simulator if this Mac doesn't have it,
+  # then make an iPhone on it.
+  RUNTIME=$(xcrun simctl list runtimes -j | python3 -c "
+import json,sys
+r=[x for x in json.load(sys.stdin)['runtimes'] if x['platform']=='iOS' and x['version'].startswith('$IOS') and x['isAvailable']]
+print(r[0]['identifier'] if r else '')")
+  if [ -z "$RUNTIME" ]; then
+    echo "::notice::Downloading the iOS $IOS simulator"
+    xcodebuild -downloadPlatform iOS -buildVersion "$IOS"
+    RUNTIME=$(xcrun simctl list runtimes -j | python3 -c "
+import json,sys
+r=[x for x in json.load(sys.stdin)['runtimes'] if x['platform']=='iOS' and x['version'].startswith('$IOS') and x['isAvailable']]
+print(r[0]['identifier'])")
+  fi
+  UDID=$(xcrun simctl create "UI tests iOS $IOS" "iPhone 15" "$RUNTIME")
+else
 UDID=$(xcrun simctl list devices available -j | python3 -c '
 import json,sys
 d=json.load(sys.stdin)["devices"]
 c=[x for k,v in d.items() if "iOS" in k for x in v if x["name"].startswith("iPhone") and "Pro Max" not in x["name"] and "Plus" not in x["name"]]
 print(sorted(c,key=lambda x:x["name"])[-1]["udid"])')
+fi
+echo "::notice::UI tests on $(xcrun simctl list devices | grep "$UDID" | head -1 | xargs) with $(xcodebuild -version | head -1)"
 # Boot the simulator and wait until it is fully up: the first test otherwise races a cold boot and the app isn't running yet.
 xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b

@@ -11,6 +11,8 @@ protocol Backend: AnyObject {
     /// Returns true when the account still needs its email confirmed.
     func signUp(email: String, password: String) async throws -> Bool
     func signInWithGoogle() async throws
+    /// Sign in with Apple: the identity token Apple returned, and the raw nonce whose SHA-256 was sent with the request.
+    func signInWithApple(idToken: String, nonce: String) async throws
     func signOut() async
     func load() async throws -> Log
     func save(_ change: LogChange) async throws
@@ -60,6 +62,10 @@ final class SupabaseBackend: Backend {
 
     func signInWithGoogle() async throws {
         do { _ = try await client.auth.signInWithOAuth(provider: .google, redirectTo: SupabaseConfig.callback) } catch { throw friendly(error) }
+    }
+
+    func signInWithApple(idToken: String, nonce: String) async throws {
+        do { _ = try await client.auth.signInWithIdToken(credentials: OpenIDConnectCredentials(provider: .apple, idToken: idToken, nonce: nonce)) } catch { throw friendly(error) }
     }
 
     func signOut() async { try? await client.auth.signOut() }
@@ -196,6 +202,7 @@ final class DemoBackend: Backend {
     func signIn(email: String, password: String) async throws {}
     func signUp(email: String, password: String) async throws -> Bool { false }
     func signInWithGoogle() async throws {}
+    func signInWithApple(idToken: String, nonce: String) async throws {}
     func signOut() async {}
     func load() async throws -> Log { log }
     func save(_ change: LogChange) async throws {}
