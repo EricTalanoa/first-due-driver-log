@@ -3,10 +3,10 @@ import XCTest
 // Taps through the app on a simulator with sample data (`-demo off|ld`, DemoBackend: nothing is sent anywhere).
 // Mirrors the website's browser tests in tests/e2e.
 final class DriverLogUITests: XCTestCase {
-    private func launch(_ demo: String, screen: String? = nil) -> XCUIApplication {
+    private func launch(_ demo: String, screen: String? = nil, extra: [String] = []) -> XCUIApplication {
         continueAfterFailure = false
         let app = XCUIApplication()
-        app.launchArguments = ["-demo", demo] + (screen.map { ["-screen", $0] } ?? [])
+        app.launchArguments = ["-demo", demo] + (screen.map { ["-screen", $0] } ?? []) + extra
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 60), "the app started")
         return app
@@ -23,6 +23,35 @@ final class DriverLogUITests: XCTestCase {
         let button = app.tabBars.buttons[name]
         XCTAssertTrue(button.waitForExistence(timeout: 15), "\(name) tab")
         button.tap()
+    }
+
+    func testTutorialOnFirstLaunch() {
+        let app = launch("off", extra: ["-tutorial", "show"])
+        XCTAssertTrue(app.staticTexts["Welcome to Driver Log"].waitForExistence(timeout: 15), "the cards open on first launch")
+        for _ in 0..<4 { app.buttons["Next"].tap() }
+        XCTAssertTrue(app.staticTexts["Pulled over?"].waitForExistence(timeout: 5), "last card")
+        app.buttons["Show me around"].tap()
+        let titles = ["Local day? Start here", "Your day, the way an officer reads it", "LD day: tap what you're doing", "Your hours", "Pulled over or inspected?"]
+        for (i, title) in titles.enumerated() {
+            XCTAssertTrue(app.staticTexts[title].waitForExistence(timeout: 10), "tip \(i + 1): \(title)")
+            app.buttons[i == titles.count - 1 ? "Done" : "Next"].tap()
+        }
+        XCTAssertFalse(app.staticTexts["Pulled over or inspected?"].waitForExistence(timeout: 2), "the tips close after Done")
+        XCTAssertTrue(app.buttons["Inspection view"].exists, "back on the LD tab")
+    }
+
+    func testTutorialReplaysFromSettings() {
+        let app = launch("off")
+        let gear = app.buttons["Driver and vehicle settings"]
+        XCTAssertTrue(gear.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.staticTexts["Welcome to Driver Log"].exists, "not shown once seen")
+        gear.tap()
+        let replay = app.buttons["Show tutorial again"]
+        XCTAssertTrue(replay.waitForExistence(timeout: 5))
+        replay.tap()
+        XCTAssertTrue(app.staticTexts["Welcome to Driver Log"].waitForExistence(timeout: 10), "replayed from Settings")
+        app.buttons["Skip"].tap()
+        XCTAssertFalse(app.staticTexts["Welcome to Driver Log"].waitForExistence(timeout: 3), "Skip closes it")
     }
 
     func testClockInFromOffTheClock() {

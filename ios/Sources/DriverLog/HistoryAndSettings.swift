@@ -138,6 +138,13 @@ struct SettingsView: View {
                     }
                     .disabled(model.log.all.isEmpty)
                 }
+                Section("Help") {
+                    Button("Show tutorial again") {
+                        dismiss()
+                        // Let this sheet close before the tutorial covers the screen.
+                        Task { try? await Task.sleep(nanoseconds: 500_000_000); model.startTutorial() }
+                    }
+                }
                 Section("Account") {
                     Button("Sign out") { confirmSignOut = true }
                     Button("Delete account", role: .destructive) { confirmDelete = true }

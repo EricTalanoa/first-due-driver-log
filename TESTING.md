@@ -7,7 +7,7 @@ Every pull request runs these automatically on GitHub. Nothing in them touches t
 | Logic tests, website | Chart, hours-of-service clocks, LD steps and times, shifts past midnight, miles, LD detection, Simple day and LD estimate, city list, save checks | `tests/unit/` | `npm test` |
 | Browser tests, website | The built site clicked through on a phone-sized screen: LD days, Today, History, editing, failures, two devices | `tests/e2e/` | `npm run build:netlify` then `npm run test:e2e` |
 | Logic tests, iPhone | The same rules in Swift, with the same numbers as the website | `ios/Tests/` | `swift test` in `ios/` (macOS) |
-| Simulator tests, iPhone | The app tapped through on a simulator: clock in, a stop with Other, Clear day, inspection view, History, Edit day | `ios/ci/host/UITests/` | `ci/uitests.sh` in `ios/` (macOS) |
+| Simulator tests, iPhone | The app tapped through on a simulator: clock in, a stop with Other, Clear day, inspection view, History, Edit day, the tutorial (first launch and replay) | `ios/ci/host/UITests/` | `ci/uitests.sh` in `ios/` (macOS) |
 | Screenshots, iPhone | Every main screen with sample data, published to the `ios-screenshots` branch | `ios/ci/screenshots.sh` | CI only |
 
 ## Scenarios covered

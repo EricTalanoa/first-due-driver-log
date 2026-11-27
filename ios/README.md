@@ -9,6 +9,7 @@ The same three tabs as the website:
 - **Today**: Add entry (Simple day, step by step, Advanced), then the day's DOT chart with totals and remarks, and the entries. Tap the chart to edit an entry.
 - **LD**: tap through the day (Clock in, Start driving, Fuel stop, Quick break, Lunch, Start unload, Switch drivers, Arrive · post-trip, Clock out), each with a time and place; hours-of-service clocks; the inspection view of the last 8 days; Fill in or fix a day; Estimate an LD day.
 - **History**: days by month, with LD trips outlined in red.
+- **Tutorial**: on an account's first launch, five swipe cards and then tooltips over the real buttons (Add entry, the chart, the LD steps, the hours, Inspection view). Seen once per account (stored as `tutorial_seen` in the account's user metadata, so a new phone doesn't repeat it); replay from Settings → Show tutorial again, or the ? on the LD tab.
 
 GPS tracking is shelved, as on the website: the app doesn't ask for location. The trip meter stays in `DriverLogCore` for later.
 

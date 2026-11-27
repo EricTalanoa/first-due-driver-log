@@ -2,10 +2,12 @@
 import DriverLogCore
 import SwiftUI
 
-/// Launch options used by CI screenshots: `-demo off|ld|driving` and `-screen daily|ld|inspect|step|timeline|history|simple|settings`.
+/// Launch options used by CI screenshots: `-demo off|ld`, `-screen daily|ld|inspect|step|timeline|history|simple|settings`, `-tutorial show|tip`.
 enum LaunchOptions {
     static var demo: String? { UserDefaults.standard.string(forKey: "demo") }
     static var screen: String? { UserDefaults.standard.string(forKey: "screen") }
+    /// `-tutorial show` (the cards, as on first launch) or `-tutorial tip` (the first tooltip).
+    static var tutorial: String? { UserDefaults.standard.string(forKey: "tutorial") }
 }
 
 @main
@@ -50,6 +52,7 @@ struct RootView: View {
                         .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
                         .tag(AppModel.Tab.history)
                 }
+                .fullScreenCover(isPresented: $model.tutorialCards) { TutorialCards() }
             }
         }
         .overlay(alignment: .bottom) {
