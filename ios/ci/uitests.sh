@@ -4,7 +4,7 @@ set -uo pipefail
 cd ci/host
 xcodegen generate --quiet
 if [ -n "${IOS:-}" ]; then
-  # An older iOS (e.g. IOS=17.5, the oldest the app supports): download that simulator if this Mac doesn't have it,
+  # An older iOS (e.g. IOS=18.0, the oldest the app supports): download that simulator if this Mac doesn't have it,
   # then make an iPhone on it.
   RUNTIME=$(xcrun simctl list runtimes -j | python3 -c "
 import json,sys

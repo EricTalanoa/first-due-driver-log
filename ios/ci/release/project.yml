@@ -10,7 +10,7 @@ targets:
   FirstDueDriverLog:
     type: application
     platform: iOS
-    deploymentTarget: "17.0"
+    deploymentTarget: "18.0"
     sources: [../host/Host.swift, Assets.xcassets]
     dependencies:
       - package: DriverLog

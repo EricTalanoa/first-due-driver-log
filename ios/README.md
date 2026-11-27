@@ -74,4 +74,4 @@ The listing text, privacy answers and review notes are in [`APP_STORE.md`](APP_S
 
 ## Supported iOS versions
 
-iOS 17 and newer (`deploymentTarget` 17.0). CI runs the simulator tests on the newest iOS and on iOS 17.5.
+iOS 18 and newer (`deploymentTarget` 18.0). CI runs the simulator tests on the newest iOS and on iOS 18.0, the oldest supported.
