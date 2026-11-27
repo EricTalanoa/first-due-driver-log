@@ -16,6 +16,9 @@ protocol Backend: AnyObject {
     func save(_ change: LogChange) async throws
     func deleteAccount() async throws
     func handle(_ url: URL)
+    /// Whether this account has seen the first-launch tutorial (kept with the account, on every phone).
+    var tutorialSeen: Bool { get async }
+    func markTutorialSeen() async throws
 }
 
 enum SupabaseConfig {
@@ -62,6 +65,19 @@ final class SupabaseBackend: Backend {
     func signOut() async { try? await client.auth.signOut() }
 
     func handle(_ url: URL) { client.auth.handle(url) }
+
+    var tutorialSeen: Bool {
+        get async {
+            // If the account can't be read (offline), don't interrupt with the tutorial.
+            guard let user = (try? await client.auth.user()) ?? client.auth.currentUser else { return true }
+            if case .bool(true)? = user.userMetadata["tutorial_seen"] { return true }
+            return false
+        }
+    }
+
+    func markTutorialSeen() async throws {
+        _ = try await client.auth.update(user: UserAttributes(data: ["tutorial_seen": .bool(true)]))
+    }
 
     func load() async throws -> Log {
         do {
@@ -173,6 +189,10 @@ final class DemoBackend: Backend {
 
     var isSignedIn: Bool { get async { true } }
     var canUseGoogle: Bool { get async { true } }
+    /// Sample data skips the tutorial unless launched with `-tutorial show`.
+    private var seen = LaunchOptions.tutorial != "show"
+    var tutorialSeen: Bool { get async { seen } }
+    func markTutorialSeen() async throws { seen = true }
     func signIn(email: String, password: String) async throws {}
     func signUp(email: String, password: String) async throws -> Bool { false }
     func signInWithGoogle() async throws {}

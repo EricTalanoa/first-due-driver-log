@@ -41,6 +41,7 @@ struct LogScreen: View {
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 16) {
                     HStack {
@@ -59,12 +60,19 @@ struct LogScreen: View {
                             .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Brand.red.opacity(0.45), style: StrokeStyle(lineWidth: 2, dash: [6, 4])))
                     }
                     .disabled(!model.loaded)
+                    .tutorialAnchor("addEntry")
                     DailyLog(sheet: $sheet, confirmClear: $confirmClear)
                 }
                 .padding(16)
             }
             .background(Brand.page.ignoresSafeArea())
             .refreshable { await model.refresh() }
+            .tutorialOverlay(.today)
+            .onChange(of: model.tutorialTip) { _, tip in
+                // Bring the highlighted view into sight.
+                if let tip, tip.tab == .today { withAnimation { proxy.scrollTo(tip.anchor, anchor: .center) } }
+            }
+            }
             .toolbar(.hidden, for: .navigationBar)
         }
         .confirmationDialog("Add to your log", isPresented: $choosing, titleVisibility: .visible) {
@@ -161,6 +169,7 @@ struct DailyLog: View {
             }
             Divider()
             HosChartView(entries: model.log.all, day: day) { e in if e.id != model.active?.id { sheet = .edit(e) } }
+                .tutorialAnchor("todayChart")
             Divider()
             HStack {
                 Text("Duty periods & trips").font(.headline).foregroundStyle(Brand.ink)

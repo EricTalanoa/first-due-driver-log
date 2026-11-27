@@ -20,9 +20,17 @@ struct LdScreen: View {
         let steps = nextSteps(current)
         let loggedToday = active != nil || all.contains { $0.start >= t0 }
         NavigationStack {
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 16) {
-                    HStack { BrandTitle(); Spacer() }
+                    HStack {
+                        BrandTitle()
+                        Spacer()
+                        Button { model.startTutorial() } label: {
+                            Image(systemName: "questionmark.circle").font(.title2).foregroundStyle(Brand.ink).frame(width: 44, height: 44)
+                        }
+                        .accessibilityLabel("Show the tutorial")
+                    }
                     if let error = model.error { ErrorBanner(text: error) { Task { await model.load() } } }
                     Paper {
                         HStack(alignment: .top) {
@@ -39,22 +47,27 @@ struct LdScreen: View {
                                 .background(Brand.color(for: active?.status ?? .offDuty), in: Capsule())
                         }
                         let lead = current != .drive && current != .riding
-                        if lead, let first = steps.first {
-                            Button(first.label(now: current)) { sheet = .step(first) }
-                                .buttonStyle(PrimaryButtonStyle())
-                                .disabled(!model.loaded || model.busy)
-                        }
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                            ForEach(lead ? Array(steps.dropFirst()) : steps, id: \.self) { s in
-                                Button(s.label(now: current)) { sheet = .step(s) }
-                                    .buttonStyle(StepButtonStyle())
+                        VStack(spacing: 10) {
+                            if lead, let first = steps.first {
+                                Button(first.label(now: current)) { sheet = .step(first) }
+                                    .buttonStyle(PrimaryButtonStyle())
                                     .disabled(!model.loaded || model.busy)
                             }
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                                ForEach(lead ? Array(steps.dropFirst()) : steps, id: \.self) { s in
+                                    Button(s.label(now: current)) { sheet = .step(s) }
+                                        .buttonStyle(StepButtonStyle())
+                                        .disabled(!model.loaded || model.busy)
+                                }
+                            }
                         }
+                        .tutorialAnchor("ldSteps")
                         if loggedToday { ClocksView(entries: all) }
                         HosChartView(entries: all, day: today) { e in if e.id != active?.id { sheet = .edit(e) } }
+                            .tutorialAnchor("ldChart")
                         Divider()
                         Button { sheet = .inspect } label: { Label("Inspection view", systemImage: "checkmark.shield") }.buttonStyle(OutlineButtonStyle())
+                            .tutorialAnchor("ldInspect")
                         Button { sheet = .timeline(today, ld: true) } label: { Label("Fill in or fix a day", systemImage: "list.clipboard") }
                             .font(.subheadline.weight(.semibold)).foregroundStyle(Brand.darkRed)
                         Button { sheet = .ld } label: { Label("Estimate an LD day", systemImage: "function") }
@@ -70,6 +83,12 @@ struct LdScreen: View {
             }
             .background(Brand.page.ignoresSafeArea())
             .refreshable { await model.refresh() }
+            .tutorialOverlay(.ld)
+            .onChange(of: model.tutorialTip) { _, tip in
+                // Bring the highlighted view into sight.
+                if let tip, tip.tab == .ld { withAnimation { proxy.scrollTo(tip.anchor, anchor: .center) } }
+            }
+            }
             .toolbar(.hidden, for: .navigationBar)
         }
         .sheet(item: $sheet) { $0.view(model) }

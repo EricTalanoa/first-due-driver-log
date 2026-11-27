@@ -20,6 +20,10 @@ final class AppModel: ObservableObject {
     @Published var day = ""
     @Published private(set) var now = Date()
     @Published var canUseGoogle = false
+    /// Tutorial: the swipe cards, then one tooltip at a time.
+    @Published var tutorialCards = false
+    @Published var tutorialTip: TutorialTip?
+    private var tutorialChecked = false
 
     let backend: Backend
     private var ticker: Timer?
@@ -61,6 +65,7 @@ final class AppModel: ObservableObject {
             log = next
             loaded = true
             if day.isEmpty { day = clock.dayKey(Date()) }
+            await offerTutorial()
         } catch where isCancellation(error) {
             // A load cut off part-way (a redraw, the app going to the background) isn't a failure: try once more quietly.
             if retrying { await Task { await self.load(retrying: false) }.value }
@@ -69,10 +74,49 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: Tutorial
+
+    /// Shows the tutorial once per account, after the first load.
+    private func offerTutorial() async {
+        guard !tutorialChecked else { return }
+        tutorialChecked = true
+        if LaunchOptions.tutorial == "tip" { showTip(.addEntry); return }
+        if !(await backend.tutorialSeen) { tutorialCards = true }
+    }
+
+    func startTutorial() {
+        tutorialTip = nil
+        tutorialCards = true
+    }
+
+    func startTips() {
+        tutorialCards = false
+        showTip(.addEntry)
+    }
+
+    func showTip(_ tip: TutorialTip) {
+        tab = tip.tab
+        tutorialTip = tip
+    }
+
+    func nextTip() {
+        if let t = tutorialTip, let next = TutorialTip(rawValue: t.rawValue + 1) { showTip(next) } else { finishTutorial() }
+    }
+
+    /// Done or skipped: remember it on the account so it isn't shown again.
+    func finishTutorial() {
+        tutorialCards = false
+        tutorialTip = nil
+        Task { try? await backend.markTutorialSeen() }
+    }
+
     func signOut() async {
         await backend.signOut()
         log = Log()
         loaded = false
+        tutorialChecked = false
+        tutorialTip = nil
+        tutorialCards = false
         day = ""
         phase = .signedOut
     }
