@@ -4,6 +4,10 @@ export type Point = { lat: number; lon: number; time: number };
 export type Entry = { id: string; status: Status; start: number; end: number | null; from: string; to: string; miles: number | null; note: string; partial: boolean; source: 'manual' | 'gps'; lastPoint?: Point; document?: string; shipper?: string; commodity?: string };
 export type Profile = { name: string; carrier: string; terminal: string; office: string; vehicle: string; coDriver: string; zone: string };
 export type Log = { entries: Entry[]; active: Entry | null; profile: Profile };
+/** First Due's office: the main office and home terminal on every log. Not editable. */
+export const OFFICE_ADDRESS = '8126 304th Ave SE, Preston, WA 98050';
+/** What Settings saves: the fixed office as office and home terminal, and no co-driver field. */
+export const normalizeProfile = (p: Profile): Profile => ({ ...p, office: OFFICE_ADDRESS, terminal: OFFICE_ADDRESS, coDriver: '' });
 export const initialLog = (): Log => ({entries: [], active: null, profile: {name: '', carrier: 'First Due Movers', terminal: '', office: '', vehicle: '', coDriver: '', zone: 'America/Los_Angeles'}});
 export function dayKey(t: number, zone: string) { return new Intl.DateTimeFormat('en-CA', {timeZone:zone, year:'numeric',month:'2-digit',day:'2-digit'}).format(t); }
 export function localInput(t: number, zone: string) { return new Intl.DateTimeFormat('sv-SE',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(t).replace(' ', 'T'); }

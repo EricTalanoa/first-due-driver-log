@@ -599,11 +599,9 @@ struct InspectionView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     LazyVGrid(columns: [GridItem(.flexible(), alignment: .topLeading), GridItem(.flexible(), alignment: .topLeading)], alignment: .leading, spacing: 10) {
                         detail("Driver", p.name.isEmpty ? "Not set" : p.name)
-                        detail("Co-driver", p.coDriver.isEmpty ? "None" : p.coDriver)
                         detail("Carrier", p.carrier)
-                        detail("Truck / trailer", p.vehicle.isEmpty ? "Not set" : p.vehicle)
-                        detail("Main office", p.office.isEmpty ? "Not set" : p.office)
-                        detail("Home terminal", p.terminal.isEmpty ? "Not set" : p.terminal)
+                        detail("Truck", p.vehicle.isEmpty ? "Not set" : p.vehicle)
+                        detail("Main office & home terminal", Profile.officeAddress)
                         detail("24-hour period starts", "Midnight, \(p.zone.replacingOccurrences(of: "_", with: " "))")
                         detail("On duty, last 8 days", "\(duration(70 * 3600 - c.cycle)) of 70h")
                     }

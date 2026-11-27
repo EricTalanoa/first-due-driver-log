@@ -173,10 +173,15 @@ test('driver details save, and the lock button signs out', async ({ page, db, op
   await open(pst(D, '09:00'));
   await page.getByRole('button', { name: 'Driver and vehicle settings' }).click();
   const dialog = page.locator('dialog[open]');
-  await dialog.locator('label', { hasText: 'Co-driver' }).locator('input').fill('Alex');
+  await expect(dialog.locator('label', { hasText: 'Co-driver' })).toHaveCount(0);
+  await expect(dialog.locator('label', { hasText: 'Home terminal' })).toHaveCount(0);
+  await expect(dialog).toContainText('Office: 8126 304th Ave SE, Preston, WA 98050');
+  await dialog.locator('label', { hasText: 'Truck number' }).locator('input').fill('14');
   await dialog.getByRole('button', { name: 'Save details' }).click();
   await expect(dialog).toHaveCount(0);
-  expect(db.profile.co_driver).toBe('Alex');
+  expect(db.profile.vehicle).toBe('14');
+  expect(db.profile.office).toBe('8126 304th Ave SE, Preston, WA 98050');
+  expect(db.profile.terminal).toBe('8126 304th Ave SE, Preston, WA 98050');
   await page.evaluate(() => sessionStorage.setItem('signed-out', '1'));
   await page.getByRole('button', { name: 'Lock log' }).click();
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();

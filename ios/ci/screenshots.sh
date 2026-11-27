@@ -36,6 +36,6 @@ shoot 07-history -demo ld -screen history
 shoot 08-fill-in-day -demo ld -screen timeline
 shoot 09-simple-day -demo off -screen simple
 shoot 10-settings -demo off -screen settings
-shoot 11-tutorial-card -demo ld -tutorial show
+for n in 0 1 2 3 4; do shoot "11-tutorial-card-$((n + 1))" -demo ld -tutorial show -tutorialCard $n; done
 shoot 12-tutorial-tip -demo ld -tutorial tip
 ls -la ci-shots

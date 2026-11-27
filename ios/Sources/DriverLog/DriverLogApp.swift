@@ -8,6 +8,8 @@ enum LaunchOptions {
     static var screen: String? { UserDefaults.standard.string(forKey: "screen") }
     /// `-tutorial show` (the cards, as on first launch) or `-tutorial tip` (the first tooltip).
     static var tutorial: String? { UserDefaults.standard.string(forKey: "tutorial") }
+    /// `-tutorialCard 2`: open the cards on that page (screenshots).
+    static var tutorialCard: Int { UserDefaults.standard.integer(forKey: "tutorialCard") }
 }
 
 @main

@@ -140,28 +140,31 @@ struct TutorialOverlay: View {
 // MARK: Cards
 
 private struct Card: Identifiable {
+    enum Art { case tabBar, stepButtons }
     let id: Int
     let icon: String
     let title: String
     let text: String
+    /// A picture of the real controls, shown in place of the icon.
+    var art: Art? = nil
 }
 
 private let cards = [
     Card(id: 0, icon: "truck.box.fill", title: "Welcome to Driver Log",
-         text: "Your hours and miles, kept the way a DOT officer reads them. A minute a day keeps you ready for an inspection."),
+         text: "Automated Local Days\nManual Entry LD Days"),
     Card(id: 1, icon: "square.split.3x1", title: "Three tabs",
-         text: "Today: local days and the day's chart.\nLD: long-distance days, one tap at a time.\nHistory: every day, with LD trips outlined in red."),
+         text: "Today: local days and the day's chart.\nLD: long-distance days, one tap at a time.\nHistory: every day, with LD trips outlined in red.", art: .tabBar),
     Card(id: 2, icon: "hand.tap.fill", title: "LD days: tap what you're doing",
-         text: "Clock in, Start driving, Fuel stop, Lunch, Start unload, Clock out. Each tap asks for the time and the place, and the chart draws itself."),
+         text: "Clock in, Start driving, Fuel stop, Lunch, Start unload, Clock out. Each tap asks for the time and the place, and the chart draws itself.", art: .stepButtons),
     Card(id: 3, icon: "chart.xyaxis.line", title: "The chart and your hours",
          text: "The chart shows off duty, sleeper, driving and on duty across the day. The clocks show what's left of your 11 hours driving, 14-hour window, 30-minute break and 70-hour week."),
     Card(id: 4, icon: "checkmark.shield.fill", title: "Pulled over?",
-         text: "Open Inspection view on the LD tab: today and the previous 7 days with your details, ready to show the officer."),
+         text: "Inspection view holds your last seven days of info."),
 ]
 
 struct TutorialCards: View {
     @EnvironmentObject var model: AppModel
-    @State private var page = 0
+    @State private var page = min(max(LaunchOptions.tutorialCard, 0), cards.count - 1)
 
     var body: some View {
         let last = page == cards.count - 1
@@ -175,8 +178,13 @@ struct TutorialCards: View {
                 ForEach(cards) { c in
                     VStack(spacing: 22) {
                         Spacer()
-                        Image(systemName: c.icon).font(.system(size: 64, weight: .semibold)).foregroundStyle(Brand.red)
-                            .frame(width: 120, height: 120).background(Color(red: 0.99, green: 0.95, blue: 0.95), in: Circle())
+                        switch c.art {
+                        case .tabBar: TabBarPicture()
+                        case .stepButtons: StepButtonsPicture()
+                        case nil:
+                            Image(systemName: c.icon).font(.system(size: 64, weight: .semibold)).foregroundStyle(Brand.red)
+                                .frame(width: 120, height: 120).background(Color(red: 0.99, green: 0.95, blue: 0.95), in: Circle())
+                        }
                         Text(c.title).font(.title.weight(.bold)).foregroundStyle(Brand.ink).multilineTextAlignment(.center)
                         Text(c.text).font(.body).foregroundStyle(Brand.muted).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                         Spacer()
@@ -200,6 +208,55 @@ struct TutorialCards: View {
             .padding(.horizontal, 24).padding(.bottom, 16)
         }
         .background(Brand.page.ignoresSafeArea())
+    }
+}
+
+/// The bottom tab bar as it looks in the app (same icons and names as DriverLogApp's TabView), with Today selected.
+private struct TabBarPicture: View {
+    private let tabs = [("Today", "calendar"), ("LD", "point.topleft.down.to.point.bottomright.curvepath"), ("History", "clock.arrow.circlepath")]
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(tabs.enumerated()), id: \.offset) { i, tab in
+                VStack(spacing: 4) {
+                    Image(systemName: tab.1).font(.system(size: 22, weight: .regular)).frame(height: 26)
+                    Text(tab.0).font(.caption2.weight(.medium))
+                }
+                .foregroundStyle(i == 0 ? Brand.red : Color(white: 0.55))
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.vertical, 12)
+        .frame(maxWidth: 320)
+        .background(.white, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Brand.paperLine))
+        .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("The tab bar at the bottom: Today, LD and History")
+    }
+}
+
+/// The LD tab's step buttons, drawn with the real styles and labels (what's offered after a fuel stop).
+private struct StepButtonsPicture: View {
+    var body: some View {
+        let steps = nextSteps(.fuel)
+        VStack(spacing: 8) {
+            if let first = steps.first {
+                Button(first.label(now: .fuel)) {}.buttonStyle(PrimaryButtonStyle())
+            }
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                ForEach(Array(steps.dropFirst()), id: \.self) { s in
+                    Button(s.label(now: .fuel)) {}.buttonStyle(StepButtonStyle())
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: 320)
+        .background(.white, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Brand.paperLine))
+        .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("The LD buttons: " + steps.map { $0.label(now: .fuel) }.joined(separator: ", "))
     }
 }
 #endif

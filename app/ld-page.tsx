@@ -3,7 +3,7 @@ import { Plus, Printer, ShieldCheck, Pencil, Trash2, Calculator, ClipboardList }
 import { Modal, Field } from './ui';
 import { HosChart } from './hos-chart';
 import { cityNames } from '../lib/simple-day';
-import { bounds, dayKey, epoch, type Entry, type Log } from '../lib/log';
+import { bounds, dayKey, epoch, OFFICE_ADDRESS, type Entry, type Log } from '../lib/log';
 import { activities, activityOf, nextSteps, estimateMiles, hosClocks, toEntries, toSteps, stepTime, stepAt, hhmm, PRESTON, LD_MARK, type Activity, type Step } from '../lib/hos';
 
 type Act = Activity | 'clockout';
@@ -122,9 +122,8 @@ export function InspectionView({ log, now, onClose }: { log: Log; now: number; o
   const c = hosClocks(all, now);
   return <Modal title="Record of duty status" onClose={onClose} wide><div className="inspection">
     <dl className="inspect-head">
-      <div><dt>Driver</dt><dd>{p.name || 'Not set'}</dd></div><div><dt>Co-driver</dt><dd>{p.coDriver || 'None'}</dd></div>
-      <div><dt>Carrier</dt><dd>{p.carrier}</dd></div><div><dt>Truck / trailer</dt><dd>{p.vehicle || 'Not set'}</dd></div>
-      <div><dt>Main office</dt><dd>{p.office || 'Not set'}</dd></div><div><dt>Home terminal</dt><dd>{p.terminal || 'Not set'}</dd></div>
+      <div><dt>Driver</dt><dd>{p.name || 'Not set'}</dd></div><div><dt>Carrier</dt><dd>{p.carrier}</dd></div>
+      <div><dt>Truck</dt><dd>{p.vehicle || 'Not set'}</dd></div><div><dt>Main office & home terminal</dt><dd>{OFFICE_ADDRESS}</dd></div>
       <div><dt>24-hour period starts</dt><dd>Midnight, {zone.replaceAll('_', ' ')}</dd></div><div><dt>On duty, last 8 days</dt><dd>{hm(70 * H - c.cycle)} of 70h</dd></div>
     </dl>
     <div className="modal-actions no-print"><button className="secondary" onClick={() => window.print()}><Printer size={18} /> Print / PDF</button></div>
