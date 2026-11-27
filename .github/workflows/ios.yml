@@ -28,13 +28,18 @@ jobs:
 
   ui-tests:
     # The newest iOS on the runner, and the oldest the app supports (deploymentTarget 17.0).
+    # iOS 17 runs on the previous macOS image: its simulator wouldn't finish booting on the newest one.
     name: ui-tests (${{ matrix.ios }})
-    runs-on: macos-latest
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        ios: [newest, "17.5"]
+        include:
+          - ios: newest
+            runner: macos-latest
+          - ios: "17.5"
+            runner: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Install XcodeGen

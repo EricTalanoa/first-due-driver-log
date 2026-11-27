@@ -26,7 +26,7 @@ d=json.load(sys.stdin)["devices"]
 c=[x for k,v in d.items() if "iOS" in k for x in v if x["name"].startswith("iPhone") and "Pro Max" not in x["name"] and "Plus" not in x["name"]]
 print(sorted(c,key=lambda x:x["name"])[-1]["udid"])')
 fi
-echo "::notice::UI tests on $(xcrun simctl list devices | grep "$UDID" | head -1 | xargs)"
+echo "::notice::UI tests on $(xcrun simctl list devices | grep "$UDID" | head -1 | xargs) with $(xcodebuild -version | head -1)"
 # Boot the simulator and wait until it is fully up: the first test otherwise races a cold boot and the app isn't running yet.
 xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b
