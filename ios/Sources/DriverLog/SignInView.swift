@@ -1,4 +1,6 @@
 #if os(iOS)
+import AuthenticationServices
+import CryptoKit
 import DriverLogCore
 import SwiftUI
 
@@ -25,6 +27,7 @@ struct SignInView: View {
     @State private var busy = false
     @State private var error = ""
     @State private var note = ""
+    @State private var nonce = ""
 
     var body: some View {
         ScrollView {
@@ -56,8 +59,19 @@ struct SignInView: View {
                     Button(busy ? "One moment…" : creating ? "Create account" : "Sign in") { Task { await submit() } }
                         .buttonStyle(PrimaryButtonStyle(color: Brand.red))
                         .disabled(busy || email.isEmpty || password.count < (creating ? 8 : 1))
+                    HStack { Rectangle().fill(Brand.cardLine).frame(height: 1); Text("or").font(.footnote).foregroundStyle(Brand.onDark); Rectangle().fill(Brand.cardLine).frame(height: 1) }
+                    SignInWithAppleButton(.continue) { request in
+                        nonce = Self.randomNonce()
+                        request.requestedScopes = [.email]
+                        request.nonce = Self.sha256(nonce)
+                    } onCompletion: { result in
+                        Task { await apple(result) }
+                    }
+                    .signInWithAppleButtonStyle(.white)
+                    .frame(height: 52)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .disabled(busy)
                     if model.canUseGoogle {
-                        HStack { Rectangle().fill(Brand.cardLine).frame(height: 1); Text("or").font(.footnote).foregroundStyle(Brand.onDark); Rectangle().fill(Brand.cardLine).frame(height: 1) }
                         Button { Task { await google() } } label: {
                             HStack(spacing: 10) {
                                 Text("G").font(.title3.weight(.heavy)).foregroundStyle(Color(red: 0.26, green: 0.52, blue: 0.96))
@@ -103,6 +117,34 @@ struct SignInView: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    private func apple(_ result: Result<ASAuthorization, Error>) async {
+        busy = true; error = ""
+        defer { busy = false }
+        do {
+            let auth = try result.get()
+            guard let credential = auth.credential as? ASAuthorizationAppleIDCredential,
+                  let data = credential.identityToken, let token = String(data: data, encoding: .utf8) else {
+                throw LogError("Apple didn't return a sign-in token. Try again.")
+            }
+            try await model.backend.signInWithApple(idToken: token, nonce: nonce)
+            await model.signedIn()
+        } catch let e as ASAuthorizationError where e.code == .canceled {
+        } catch is CancellationError {
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// A random string sent (hashed) to Apple and (raw) to Supabase, so a sign-in token can't be replayed.
+    private static func randomNonce(length: Int = 32) -> String {
+        let chars = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        return String((0..<length).map { _ in chars[Int.random(in: 0..<chars.count)] })
+    }
+
+    private static func sha256(_ input: String) -> String {
+        SHA256.hash(data: Data(input.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     private func google() async {

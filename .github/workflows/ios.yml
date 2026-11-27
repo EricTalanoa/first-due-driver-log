@@ -27,14 +27,22 @@ jobs:
         run: ci/run.sh xcodebuild build -scheme DriverLog -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO -skipPackagePluginValidation -skipMacroValidation
 
   ui-tests:
+    # The newest iOS on the runner, and the oldest the app supports (deploymentTarget 17.0).
+    name: ui-tests (${{ matrix.ios }})
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        ios: [newest, "17.5"]
     steps:
       - uses: actions/checkout@v4
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Simulator tap-through tests
         run: ci/run.sh ci/uitests.sh
+        env:
+          IOS: ${{ matrix.ios != 'newest' && matrix.ios || '' }}
 
   screenshots:
     runs-on: macos-latest
