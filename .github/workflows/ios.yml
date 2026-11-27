@@ -25,6 +25,12 @@ jobs:
         run: ci/run.sh swift test
       - name: Build app (iOS device SDK, unsigned)
         run: ci/run.sh xcodebuild build -scheme DriverLog -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO -skipPackagePluginValidation -skipMacroValidation
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: App Store archive (dry run, unsigned)
+        run: ci/run.sh ci/release.sh
+        env:
+          DRY_RUN: "1"
 
   ui-tests:
     # The newest iOS on the runner, and the oldest the app supports (deploymentTarget 18.0).

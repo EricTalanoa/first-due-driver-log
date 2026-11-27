@@ -7,7 +7,7 @@ Copy these into App Store Connect. Links: support https://first-due-driver-log-e
 |---|---|
 | Name (30 max) | First Due Driver Log |
 | Subtitle (30 max) | Duty log & DOT chart |
-| Bundle ID | com.erictalanoa.FirstDueDriverLog |
+| Bundle ID | XTL-49885974.com.erictalanoa.FirstDueDriverLog (the ID xtool registered; App Store Connect can't change it after the first upload) |
 | SKU | driverlog |
 | Primary category | Business |
 | Secondary category | Navigation |

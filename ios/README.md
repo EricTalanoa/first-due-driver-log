@@ -70,7 +70,7 @@ echo 'export USBMUXD_SOCKET_ADDRESS="$(ip route list default | awk '"'"'{print $
 2. GitHub → Actions → **iOS release (TestFlight)** → Run workflow, with the version (e.g. `1.0`). The build number is the run number, so every upload is new.
 3. After Apple processes it (10–30 minutes), the build is in App Store Connect → TestFlight. Submit it for review from there.
 
-The listing text, privacy answers and review notes are in [`APP_STORE.md`](APP_STORE.md). The App Store build uses `ci/release/project.yml` (same code; bundle ID `com.erictalanoa.FirstDueDriverLog`).
+The listing text, privacy answers and review notes are in [`APP_STORE.md`](APP_STORE.md). The App Store build uses `ci/release/project.yml` (same code; bundle ID `XTL-49885974.com.erictalanoa.FirstDueDriverLog`, the same ID xtool uses for the copy on your phone).
 
 ## Supported iOS versions
 
