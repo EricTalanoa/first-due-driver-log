@@ -122,12 +122,10 @@ struct SettingsView: View {
             Form {
                 Section("Driver & vehicle") {
                     TextField("Driver’s full name", text: $p.name)
-                    TextField("Truck / trailer numbers or plates", text: $p.vehicle)
+                    TextField("Truck number", text: $p.vehicle)
                     TextField("Carrier", text: $p.carrier)
-                    TextField("Home terminal address", text: $p.terminal)
-                    TextField("Main office address", text: $p.office)
-                    TextField("Co-driver (optional)", text: $p.coDriver)
-                    Picker("Home-terminal timezone", selection: $p.zone) {
+                    LabeledContent("Office") { Text(Profile.officeAddress).multilineTextAlignment(.trailing) }
+                    Picker("Time zone", selection: $p.zone) {
                         ForEach(Profile.zones, id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ")).tag($0) }
                     }
                 }
@@ -161,7 +159,7 @@ struct SettingsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(model.busy ? "Saving…" : "Save") {
                         Task {
-                            do { try await model.saveProfile(p); dismiss() } catch { self.error = error.localizedDescription }
+                            do { try await model.saveProfile(p.normalized); dismiss() } catch { self.error = error.localizedDescription }
                         }
                     }
                     .disabled(model.busy || p == model.log.profile)

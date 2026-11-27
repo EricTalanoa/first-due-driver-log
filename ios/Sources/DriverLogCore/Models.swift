@@ -82,6 +82,18 @@ public struct Profile: Codable, Equatable, Sendable {
     public var coDriver: String
     public var zone: String
 
+    /// First Due's office, the main office and home terminal on every log. Not editable.
+    public static let officeAddress = "8126 304th Ave SE, Preston, WA 98050"
+
+    /// What Settings saves: the fixed office as office and home terminal, and no co-driver field.
+    public var normalized: Profile {
+        var p = self
+        p.office = Profile.officeAddress
+        p.terminal = Profile.officeAddress
+        p.coDriver = ""
+        return p
+    }
+
     public init(name: String = "", carrier: String = "First Due Movers", terminal: String = "", office: String = "", vehicle: String = "",
                 coDriver: String = "", zone: String = "America/Los_Angeles") {
         self.name = name
