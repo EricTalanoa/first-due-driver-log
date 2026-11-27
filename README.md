@@ -87,8 +87,8 @@ xtool dev
 
 The project began from a starter template. These folders and files are left over from it and aren't used by the website or the app:
 
-- `components/ui/`, `db/`, `drizzle/`, `examples/`
+- `components/ui/`
 - `build/`, `scripts/`, `vendor/`
 - `cloudflare-env.d.ts`, `next.config.ts`, `vite.config.ts`, and the `dev`/`build`/`start` npm scripts
 
-The live site builds with `vite.netlify.config.ts` and `npm run build:netlify`.
+The old server code (`app/api/`, `db/`, `drizzle/`, `examples/`) was removed in Nov 2026. The live site builds with `vite.netlify.config.ts` and `npm run build:netlify`.
