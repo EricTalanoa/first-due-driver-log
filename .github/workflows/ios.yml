@@ -26,6 +26,16 @@ jobs:
       - name: Build app (iOS device SDK, unsigned)
         run: ci/run.sh xcodebuild build -scheme DriverLog -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO -skipPackagePluginValidation -skipMacroValidation
 
+  ui-tests:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Simulator tap-through tests
+        run: ci/run.sh ci/uitests.sh
+
   screenshots:
     runs-on: macos-latest
     permissions:

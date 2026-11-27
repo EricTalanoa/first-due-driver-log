@@ -62,6 +62,7 @@ struct LdScreen: View {
                         Divider()
                         Button(role: .destructive) { confirmClear = true } label: { Label("Clear day", systemImage: "trash") }
                             .font(.subheadline.weight(.semibold))
+                            .accessibilityIdentifier("ld-clear-day")
                             .disabled(!model.loaded || model.busy || !loggedToday)
                     }
                 }
@@ -359,7 +360,8 @@ struct StepSheet: View {
         .onAppear {
             guard !ready else { return }
             ready = true
-            if let a = model.active { place = a.status == .driving ? "" : a.from } else { place = suggestions().first ?? "" }
+            // Preselect the first real suggestion (the hotel slot is blank when last night wasn't one).
+            if let a = model.active { place = a.status == .driving ? "" : a.from } else { place = suggestions().first { !$0.isEmpty } ?? "" }
         }
     }
 
@@ -372,7 +374,7 @@ struct StepSheet: View {
             // Where yesterday ended, if it was a hotel or somewhere other than the office.
             let before = t0
             let prev = model.log.entries.filter { e in e.end.map { $0 <= before && $0 > before.addingTimeInterval(-86_400) } ?? false }
-                .max { $0.end! < $1.end! }
+                .max { ($0.end ?? $0.start) < ($1.end ?? $1.start) }
             let last = prev.map { $0.to.isEmpty ? $0.from : $0.to } ?? ""
             return [last == Places.preston ? "" : last, Places.preston]
         }
@@ -512,8 +514,10 @@ struct TimelineEditor: View {
     private func setUp() {
         guard !ready else { return }
         ready = true
-        date = day
-        prior = model.entries(startingOn: day).filter { $0.end != nil }
+        // Editing works on the whole shift, which can run past midnight.
+        let shift = shiftOf(model.log.entries, day: day, clock: model.clock)
+        date = shift.day
+        prior = shift.entries
         let clock = model.clock
         rows = prior.isEmpty
             ? [Row(time: "07:00", step: .act(.pretrip), place: Places.preston, miles: "")]
@@ -551,7 +555,7 @@ struct TimelineEditor: View {
             if let d = entries.first(where: { $0.status == .driving && $0.miles == nil }) {
                 throw LogError("Couldn’t estimate the drive from “\(d.from)” to “\(d.to)”. Enter its miles.")
             }
-            try await model.saveSimpleDay(entries, date: date, replace: !prior.isEmpty || !model.entries(startingOn: date).isEmpty)
+            try await model.saveSimpleDay(entries, date: date, replace: prior.isEmpty && !model.entries(startingOn: date).isEmpty, replacing: prior.map(\.id))
             dismiss()
         } catch {
             self.error = error.localizedDescription

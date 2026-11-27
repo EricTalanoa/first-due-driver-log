@@ -24,3 +24,24 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.erictalanoa.DriverLogHost
         CODE_SIGNING_ALLOWED: "NO"
         SWIFT_VERSION: "5.0"
+  DriverLogUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources: [UITests]
+    dependencies:
+      - target: DriverLogHost
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.erictalanoa.DriverLogUITests
+        TEST_TARGET_NAME: DriverLogHost
+        CODE_SIGNING_ALLOWED: "NO"
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: "YES"
+schemes:
+  DriverLogHost:
+    build:
+      targets:
+        DriverLogHost: all
+    test:
+      targets: [DriverLogUITests]

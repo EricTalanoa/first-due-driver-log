@@ -216,6 +216,39 @@ extension Clock {
     }
 }
 
+// MARK: Editing a shift that runs past midnight
+
+/// The work shift that a day's editing covers: the day's own entries, carried on past midnight while the work
+/// continues (each next entry starts within an hour of the last). Entries at the start of the day that carry on
+/// a shift from the day before belong to that day; if that's all the day has, that earlier shift is returned.
+/// Open entries are left out. Mirrors `shiftOf` in lib/hos.ts.
+public func shiftOf(_ entries: [Entry], day: String, clock: Clock) -> (day: String, entries: [Entry]) {
+    let closed = entries.filter { $0.end != nil }.sorted { $0.start < $1.start }
+    func joins(_ a: Entry, _ b: Entry) -> Bool { b.start >= a.end! && b.start.timeIntervalSince(a.end!) <= 3600 }
+    let (s, e) = clock.bounds(day)
+    let inDay = closed.filter { $0.start >= s && $0.start < e }
+    guard !inDay.isEmpty else { return (day, []) }
+    func index(_ x: Entry) -> Int { closed.firstIndex { $0.id == x.id }! }
+    // Entries continuing a shift that began before midnight.
+    var tail = 0
+    for x in inDay {
+        let i = index(x)
+        guard i > 0 else { break }
+        let prev = closed[i - 1]
+        if joins(prev, x) && (prev.start < s || tail > 0) { tail += 1 } else { break }
+    }
+    var own = Array(inDay.dropFirst(tail))
+    if own.isEmpty {
+        var head = inDay[0]
+        var k = index(head) - 1
+        while k >= 0 && joins(closed[k], head) { head = closed[k]; k -= 1 }
+        return shiftOf(entries, day: clock.dayKey(head.start), clock: clock)
+    }
+    var k = index(own[own.count - 1]) + 1
+    while k < closed.count && closed[k].start >= e && joins(own[own.count - 1], closed[k]) { own.append(closed[k]); k += 1 }
+    return (day, own)
+}
+
 // MARK: The 24-hour chart
 
 public struct Segment: Equatable, Sendable {

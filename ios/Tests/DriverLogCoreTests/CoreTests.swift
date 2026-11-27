@@ -226,6 +226,26 @@ final class CoreTests: XCTestCase {
         XCTAssertThrowsError(try clock.stepAt("23:00", now: now, after: try clock.date(day: "2026-11-26", time: "07:00")))
     }
 
+    func testShiftPastMidnightEditsAsOne() throws {
+        var prev: Date?
+        func at(_ day: String, _ t: String, _ s: Step, _ place: String) throws -> TimelineStep {
+            let time = try clock.stepTime(day: day, t, after: prev); prev = time
+            return TimelineStep(time: time, step: s, place: place)
+        }
+        let night = try toEntries([try at("2026-11-20", "20:00", .act(.pretrip), Places.preston), try at("2026-11-20", "20:15", .act(.drive), Places.preston),
+                                   try at("2026-11-20", "01:00", .act(.posttrip), "Boise"), try at("2026-11-20", "01:15", .clockOut, "Boise")])
+        XCTAssertEqual(shiftOf(night, day: "2026-11-20", clock: clock).entries.map(\.id), night.map(\.id))
+        let back = shiftOf(night, day: "2026-11-21", clock: clock)
+        XCTAssertEqual(back.day, "2026-11-20")
+        XCTAssertEqual(back.entries.count, 3)
+        prev = nil
+        let morning = try toEntries([try at("2026-11-21", "09:00", .act(.pretrip), "Boise"), try at("2026-11-21", "09:15", .act(.drive), "Boise"), try at("2026-11-21", "12:00", .clockOut, "Twin Falls")])
+        let own = shiftOf(night + morning, day: "2026-11-21", clock: clock)
+        XCTAssertEqual(own.day, "2026-11-21")
+        XCTAssertEqual(own.entries.map(\.id), morning.map(\.id))
+        XCTAssertTrue(shiftOf([], day: "2026-11-20", clock: clock).entries.isEmpty)
+    }
+
     func testHosClocks() throws {
         let es = try toEntries(try ldSteps("2026-11-20"))
         let c = HosClocks(entries: es, now: try clock.date(day: "2026-11-20", time: "13:00"))
