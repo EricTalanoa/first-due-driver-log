@@ -3,7 +3,7 @@
 A driving and duty log for First Due Movers drivers. It keeps a DOT-style duty chart (record of duty status) for every day: estimated from a few answers on local days, and filled in stop by stop on long-distance (LD) days. Every day's record is kept on the web and on iPhone.
 
 **Live site:** https://first-due-driver-log-eric.netlify.app
-**Status:** website in daily use · iPhone app in testing ([#13](https://github.com/EricTalanoa/first-due-driver-log/pull/13)) · App Store next
+**Status:** website in daily use · iPhone app submitted to the App Store (Nov 2026), in TestFlight meanwhile
 
 | Today | LD in progress | Inspection view | History |
 |---|---|---|---|
@@ -33,9 +33,9 @@ Miles are estimates: each place is matched to a city in the app's list, and the 
 | Part | Stack | Where |
 |---|---|---|
 | Website | React + Vite, deployed by Netlify from `main` | `app/`, `lib/`, `index.html` |
-| Data & sign-in | Supabase (Postgres, row-level security, email + Google auth) | `supabase/migrations/` |
+| Data & sign-in | Supabase (Postgres, row-level security, email, Google and Apple sign-in) | `supabase/migrations/` |
 | iPhone app | SwiftUI, built from Windows with [xtool](https://github.com/xtool-org/xtool) | `ios/` |
-| CI | GitHub Actions on macOS: core tests, iOS build, simulator screenshots | `.github/workflows/ios.yml` |
+| CI | GitHub Actions: website tests; on macOS the iOS build, simulator tests (iOS 18.0 and newest), screenshots, TestFlight release | `.github/workflows/` |
 
 Both the website and the app read and write the same Supabase tables:
 
@@ -57,8 +57,8 @@ The iPhone app has the same three tabs and uses the Swift port of these rules (`
 
 ```sh
 npm ci
+npm run dev                # local dev at http://127.0.0.1:5173
 npm run build:netlify      # production build into netlify-dist/
-npx netlify dev            # local dev at http://localhost:8888
 ```
 
 Use Node.js 22.13 or newer. No environment variables are needed. Pushing to `main` deploys to Netlify, and pull requests get a preview link.
@@ -79,16 +79,12 @@ xtool dev
 - [x] Simple day with multiple jobs, Edit day, Clear day; better GPS on the web ([#10](https://github.com/EricTalanoa/first-due-driver-log/pull/10))
 - [x] Supabase database and sign-in with Google; import of the old log ([#11](https://github.com/EricTalanoa/first-due-driver-log/pull/11))
 - [x] History grouped by month ([#12](https://github.com/EricTalanoa/first-due-driver-log/pull/12))
-- [ ] iPhone app: Today, LD and History tabs like the website (in testing)
-- [ ] App Store: Sign in with Apple, privacy policy, signed TestFlight builds from CI
-- [ ] Remove the unused starter scaffolding (see below)
+- [x] iPhone app: Today, LD and History tabs like the website, first-launch tutorial
+- [x] App Store: Sign in with Apple, privacy policy, signed TestFlight builds from CI, submitted for review
+- [x] Remove the unused starter scaffolding
 
 ## Repository notes
 
-The project began from a starter template. These folders and files are left over from it and aren't used by the website or the app:
-
-- `components/ui/`
-- `build/`, `scripts/`, `vendor/`
-- `cloudflare-env.d.ts`, `next.config.ts`, `vite.config.ts`, and the `dev`/`build`/`start` npm scripts
-
-The old server code (`app/api/`, `db/`, `drizzle/`, `examples/`) was removed in Nov 2026. The live site builds with `vite.netlify.config.ts` and `npm run build:netlify`.
+- The live site builds with `vite.netlify.config.ts` (`npm run build:netlify`); there is no server code.
+- `ios-screenshots` and `ios-screenshots-pr` are branches written by CI with the latest iPhone screens (including the App Store ones, `appstore-*.png`). Don't edit them.
+- App Store listing text and review answers: [`ios/APP_STORE.md`](ios/APP_STORE.md). Releasing to TestFlight: [`ios/README.md`](ios/README.md#releasing-to-testflight-and-the-app-store).
