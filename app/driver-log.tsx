@@ -100,7 +100,7 @@ export default function DriverLog(){
   
  </main>;
 }
-const blankJob={load:'',unload:''};
+const blankJob={load:'',unload:'',single:false};
 /** Offices to offer: the open ones, plus the one an older saved day used. */
 const officeChoices=(current:Office)=>[...new Set([...activeOffices,current])];
 function SimpleDayEditor({day,zone,busy,existing,onClose,onSave}:{day:string;zone:string;busy:boolean;existing:(date:string)=>Entry[];onClose:()=>void;onSave:(entries:Entry[],date:string,replace:boolean)=>Promise<void>}){
@@ -108,19 +108,20 @@ function SimpleDayEditor({day,zone,busy,existing,onClose,onSave}:{day:string;zon
  const [v,setV]=useState<SimpleDay>(()=>{if(prior)return prior;let last:Partial<SimpleDay>={};try{last=JSON.parse(localStorage.getItem('simple-defaults')||'{}');}catch{}
   return {date:day,office:'Preston',jobs:[{...blankJob}],clockIn:/^\d\d:\d\d$/.test(last.clockIn??'')?last.clockIn!:'07:45',clockOut:/^\d\d:\d\d$/.test(last.clockOut??'')?last.clockOut!:'16:00',lunch:[0,15,30,45,60].includes(last.lunch as number)?last.lunch!:30,miles:null};}),[replace,setReplace]=useState(!!prior),[error,setError]=useState('');
  const set=<K extends keyof SimpleDay>(k:K,x:SimpleDay[K])=>{setError('');setV(s=>({...s,[k]:x}));};
- const setJob=(i:number,k:keyof typeof blankJob,x:string)=>{setError('');setV(s=>({...s,jobs:s.jobs.map((j,n)=>n===i?{...j,[k]:x}:j)}));};
+ const setJob=(i:number,k:'load'|'unload',x:string)=>{setError('');setV(s=>({...s,jobs:s.jobs.map((j,n)=>n===i?{...j,[k]:x}:j)}));};
+ const onlyBlank=v.jobs.length===1&&!v.jobs[0].single&&!v.jobs[0].load.trim()&&!v.jobs[0].unload.trim();
  const others=existing(v.date);
  let plan:ReturnType<typeof planSimpleDay>|null=null,problem='';
- if(v.jobs.every(j=>j.load.trim()&&j.unload.trim())){try{plan=planSimpleDay(v,zone,()=>'preview');}catch(e){problem=e instanceof Error?e.message:'Check the details.';}}
+ if(v.jobs.every(j=>j.load.trim()&&(j.single||j.unload.trim()))){try{plan=planSimpleDay(v,zone,()=>'preview');}catch(e){problem=e instanceof Error?e.message:'Check the details.';}}
  const fmt=(m:number)=>`${Math.floor(m/60)}h ${String(m%60).padStart(2,'0')}m`;
  async function submit(e:FormEvent){e.preventDefault();setError('');try{const p=planSimpleDay(v,zone);try{localStorage.setItem('simple-defaults',JSON.stringify({office:v.office,clockIn:v.clockIn,clockOut:v.clockOut,lunch:v.lunch}));}catch{}await onSave(p.entries,v.date,replace&&others.length>0);}catch(e){setError(e instanceof Error?e.message:'Could not add this day.');}}
  return <Modal title={prior?'Edit day':'Simple day'} onClose={onClose}><form onSubmit={submit} className="simple-day">
   <Field label="Date"><input type="date" required value={v.date} onChange={e=>e.target.value&&set('date',e.target.value)}/></Field>
   {officeChoices(v.office).length>1?<div className="field"><span>Starting office</span><div className="choice-row" role="group" aria-label="Starting office">{officeChoices(v.office).map(o=><button type="button" key={o} aria-pressed={v.office===o} onClick={()=>set('office',o)}>{o}</button>)}</div></div>:<p className="subtle">Starts and ends at the Preston office.</p>}
   <datalist id="city-list">{cityNames.map(c=><option key={c} value={c}/>)}</datalist>
-  {v.jobs.map((j,i)=><div key={i} className={v.jobs.length>1?'job':''}>{v.jobs.length>1&&<div className="job-head"><strong>Job {i+1}</strong><button type="button" className="text-button" onClick={()=>set('jobs',v.jobs.filter((_,n)=>n!==i))}>Remove</button></div>}
-   <div className="form-grid"><Field label="Load city"><input list="city-list" required autoComplete="off" placeholder="e.g. Issaquah" value={j.load} onChange={e=>setJob(i,'load',e.target.value)}/></Field><Field label="Unload city"><input list="city-list" required autoComplete="off" placeholder="e.g. Seattle" value={j.unload} onChange={e=>setJob(i,'unload',e.target.value)}/></Field></div></div>)}
-  {v.jobs.length<4&&<button type="button" className="text-button" onClick={()=>set('jobs',[...v.jobs,{...blankJob}])}><Plus size={16}/> Add another job</button>}
+  {v.jobs.map((j,i)=><div key={i} className={v.jobs.length>1?'job':''}>{(v.jobs.length>1||j.single)&&<div className="job-head"><strong>{v.jobs.length>1?`Job ${i+1}`:'Job'}{j.single&&' · single location'}</strong><button type="button" className="text-button" onClick={()=>set('jobs',v.jobs.length>1?v.jobs.filter((_,n)=>n!==i):[{...blankJob}])}>Remove</button></div>}
+   {j.single?<Field label="Job city (single location)"><input list="city-list" required autoComplete="off" placeholder="e.g. Bellevue" value={j.load} onChange={e=>setJob(i,'load',e.target.value)}/></Field>:<div className="form-grid"><Field label="Load city"><input list="city-list" required autoComplete="off" placeholder="e.g. Issaquah" value={j.load} onChange={e=>setJob(i,'load',e.target.value)}/></Field><Field label="Unload city"><input list="city-list" required autoComplete="off" placeholder="e.g. Seattle" value={j.unload} onChange={e=>setJob(i,'unload',e.target.value)}/></Field></div>}</div>)}
+  {v.jobs.length<4&&<div className="job-adds"><button type="button" className="text-button" onClick={()=>set('jobs',onlyBlank?[{...blankJob,single:true}]:[...v.jobs,{...blankJob,single:true}])}><Plus size={16}/> Single location</button><button type="button" className="text-button" onClick={()=>set('jobs',[...v.jobs,{...blankJob}])}><Plus size={16}/> Add another job</button></div>}
   <div className="form-grid"><Field label="Clock in"><input type="time" required value={v.clockIn} onChange={e=>set('clockIn',e.target.value)}/></Field><Field label="Clock out"><input type="time" required value={v.clockOut} onChange={e=>set('clockOut',e.target.value)}/></Field></div>
   <Field label="Lunch"><select value={v.lunch} onChange={e=>set('lunch',Number(e.target.value))}>{[...new Set([0,15,30,45,60,v.lunch])].sort((a,b)=>a-b).map(m=><option key={m} value={m}>{m?`${m} minutes`:'No lunch'}</option>)}</select></Field>
   {(problem.startsWith('Couldn')||v.miles!=null)&&<Field label="Total miles for the day"><input type="number" inputMode="decimal" min="0" step="0.1" placeholder="From your odometer" value={v.miles??''} onChange={e=>set('miles',e.target.value===''?null:Number(e.target.value))}/></Field>}

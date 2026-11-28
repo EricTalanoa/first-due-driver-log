@@ -2,6 +2,23 @@ import { test, expect, later, step, settled, row, pst, PRESTON } from './backend
 
 const D = '2026-11-20';
 
+test('Simple day: a single-location (labor only) job', async ({ page, db, open }) => {
+  await open(pst(D, '18:00'));
+  await page.getByRole('button', { name: 'Add entry' }).click();
+  await page.getByRole('button', { name: /Simple day/ }).click();
+  const dialog = page.locator('dialog[open]');
+  await dialog.getByRole('button', { name: 'Single location' }).click();
+  await expect(dialog.getByPlaceholder('e.g. Seattle')).toHaveCount(0);
+  await dialog.getByPlaceholder('e.g. Bellevue').fill('Bellevue');
+  await expect(dialog.locator('.plan-preview')).toContainText('mi');
+  await dialog.getByRole('button', { name: 'Add day' }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(db.day(D).filter(r => r.status === 'Driving').map(r => r.note)).toEqual(['To job site', 'Return to office']);
+  await page.getByRole('button', { name: 'Edit day' }).click();
+  await expect(page.locator('dialog[open] input[placeholder="e.g. Bellevue"]')).toHaveValue('Bellevue');
+  await expect(page.locator('dialog[open]')).toContainText('single location');
+});
+
 test('Simple day: add, reopen with Edit day, change it, then clear it', async ({ page, db, open }) => {
   await open(pst(D, '18:00'));
   await page.getByRole('button', { name: 'Add entry' }).click();

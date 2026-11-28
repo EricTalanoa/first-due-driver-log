@@ -136,3 +136,4 @@ dialog.wide{width:900px}
 .place-options button{justify-content:flex-start;min-height:48px;padding:10px 14px;border:1px solid #cdd2d9;border-radius:10px;background:#fff;color:#252b32;font-weight:600;text-align:left}
 .place-options button[aria-pressed=true]{background:#b52127;border-color:#b52127;color:#fff}
 .ld-clear{margin-top:14px;padding-top:12px;border-top:1px solid #eceef1}
+.job-adds{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 22px}

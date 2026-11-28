@@ -35,6 +35,22 @@ final class CoreTests: XCTestCase {
         XCTAssertNil(back?.miles)
     }
 
+    func testSingleLocationJob() throws {
+        let day = SimpleDay(date: "2025-03-04", jobs: [Job(load: "Bellevue", single: true)])
+        let plan = try planSimpleDay(day, zone: pacific)
+        XCTAssertEqual(plan.entries.filter { $0.status == .driving }.map(\.note), ["To job site", "Return to office"])
+        XCTAssertTrue(plan.entries.contains { $0.note.hasPrefix("Labor, single location") && $0.from == "Bellevue, WA" })
+        XCTAssertFalse(plan.entries.contains { $0.note.hasPrefix("Loading") || $0.note.hasPrefix("Unloading") })
+        try validate(Log(entries: plan.entries), now: plan.entries.last!.end!)
+        XCTAssertEqual(readSimpleDay(plan.entries, zone: pacific)?.jobs, [Job(load: "Bellevue", single: true)])
+
+        let mixed = SimpleDay(date: "2025-03-04", jobs: [Job(load: "Renton", unload: "Bellevue"), Job(load: "Kirkland", single: true)], clockOut: "17:00")
+        let both = try planSimpleDay(mixed, zone: pacific)
+        XCTAssertEqual(both.entries.filter { $0.status == .driving }.map(\.note), ["To load (job 1)", "To unload (job 1)", "To job site (job 2)", "Return to office"])
+        XCTAssertEqual(readSimpleDay(both.entries, zone: pacific)?.jobs, mixed.jobs)
+        XCTAssertThrowsError(try planSimpleDay(SimpleDay(date: "2025-03-04", jobs: [Job(single: true)]), zone: pacific))
+    }
+
     func testOdometerMilesSaveExactly() throws {
         let plan = try planSimpleDay(SimpleDay(date: "2025-03-04", jobs: [Job(load: "Issaquah", unload: "Seattle")], miles: 80), zone: pacific)
         XCTAssertEqual(plan.miles, 80)
