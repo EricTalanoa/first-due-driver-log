@@ -49,6 +49,25 @@ describe('Simple day', () => {
     const day = simple({ office: 'Kent' });
     expect(readSimpleDay(planSimpleDay(day, z).entries, z)?.office).toBe('Kent');
   });
+  it('plans a single-location (labor only) job: drive there, work, drive back', () => {
+    const day = simple({ jobs: [{ load: 'Bellevue', unload: '', single: true }] });
+    const p = planSimpleDay(day, z);
+    expect(span(p.entries)).toEqual(['07:45', '16:00']);
+    const drives = p.entries.filter(e => e.status === 'Driving');
+    expect(drives.map(e => e.note)).toEqual(['To job site', 'Return to office']);
+    expect(drives[0].to).toBe('Bellevue, WA');
+    expect(p.entries.some(e => e.note.startsWith('Labor, single location') && e.from === 'Bellevue, WA')).toBe(true);
+    expect(p.entries.some(e => /^(Loading|Unloading)/.test(e.note))).toBe(false);
+    expect(readSimpleDay(p.entries, z)).toEqual(day);
+  });
+  it('mixes a single-location job with a regular one', () => {
+    const day = simple({ jobs: [{ load: 'Renton', unload: 'Bellevue' }, { load: 'Kirkland', unload: '', single: true }], clockOut: '17:00' });
+    const p = planSimpleDay(day, z);
+    expect(p.entries.filter(e => e.status === 'Driving').map(e => e.note)).toEqual(['To load (job 1)', 'To unload (job 1)', 'To job site (job 2)', 'Return to office']);
+    expect(() => validateLog({ ...initialLog(), entries: p.entries })).not.toThrow();
+    expect(readSimpleDay(p.entries, z)).toEqual(day);
+    expect(() => planSimpleDay(simple({ jobs: [{ load: '', unload: '', single: true }] }), z)).toThrow(/city of the job/);
+  });
   it('explains what is wrong', () => {
     expect(() => planSimpleDay(simple({ jobs: [{ load: 'Issaquah', unload: '' }] }), z)).toThrow(/load city and an unload city/);
     expect(() => planSimpleDay(simple({ clockOut: '07:00' }), z)).toThrow(/after clock in/);

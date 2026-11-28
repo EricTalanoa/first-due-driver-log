@@ -20,7 +20,7 @@ struct SimpleDayEditor: View {
     var body: some View {
         let zone = model.log.profile.timeZone
         let others = model.entries(startingOn: v.date)
-        let complete = v.jobs.allSatisfy { !$0.load.trimmingCharacters(in: .whitespaces).isEmpty && !$0.unload.trimmingCharacters(in: .whitespaces).isEmpty }
+        let complete = v.jobs.allSatisfy { !$0.load.trimmingCharacters(in: .whitespaces).isEmpty && ($0.single || !$0.unload.trimmingCharacters(in: .whitespaces).isEmpty) }
         let attempt: Result<Plan, Error>? = complete && ready ? Result { try planSimpleDay(v, zone: zone, newID: { "preview" }) } : nil
         NavigationStack {
             ScrollView {
@@ -38,24 +38,40 @@ struct SimpleDayEditor: View {
                     } else {
                         Text("Starts and ends at the Preston office.").font(.subheadline).foregroundStyle(Brand.muted)
                     }
-                    ForEach(Array(v.jobs.enumerated()), id: \.offset) { i, _ in
+                    ForEach(Array(v.jobs.enumerated()), id: \.offset) { i, j in
                         VStack(alignment: .leading, spacing: 10) {
-                            if v.jobs.count > 1 {
+                            if v.jobs.count > 1 || j.single {
                                 HStack {
-                                    Text("Job \(i + 1)").font(.subheadline.weight(.bold))
+                                    Text("\(v.jobs.count > 1 ? "Job \(i + 1)" : "Job")\(j.single ? " · single location" : "")").font(.subheadline.weight(.bold))
                                     Spacer()
-                                    Button("Remove") { if i < v.jobs.count { v.jobs.remove(at: i) } }.font(.subheadline.weight(.semibold))
+                                    Button("Remove") {
+                                        if v.jobs.count > 1 { if i < v.jobs.count { v.jobs.remove(at: i) } } else { v.jobs = [Job()] }
+                                    }
+                                    .font(.subheadline.weight(.semibold))
                                 }
                             }
-                            CityField(label: "Load city", placeholder: "e.g. Issaquah", text: job(i, \.load))
-                            CityField(label: "Unload city", placeholder: "e.g. Seattle", text: job(i, \.unload))
+                            if j.single {
+                                CityField(label: "Job city (single location)", placeholder: "e.g. Bellevue", text: job(i, \.load))
+                            } else {
+                                CityField(label: "Load city", placeholder: "e.g. Issaquah", text: job(i, \.load))
+                                CityField(label: "Unload city", placeholder: "e.g. Seattle", text: job(i, \.unload))
+                            }
                         }
                         .padding(v.jobs.count > 1 ? 12 : 0)
                         .overlay(RoundedRectangle(cornerRadius: 10).stroke(v.jobs.count > 1 ? Brand.paperLine : .clear))
                     }
                     if v.jobs.count < 4 {
-                        Button { v.jobs.append(Job()) } label: { Label("Add another job", systemImage: "plus") }
-                            .font(.subheadline.weight(.semibold))
+                        HStack {
+                            Button {
+                                // A blank first job turns into the single-location one; otherwise it's added.
+                                let blank = v.jobs.count == 1 && !v.jobs[0].single && v.jobs[0].load.trimmingCharacters(in: .whitespaces).isEmpty
+                                    && v.jobs[0].unload.trimmingCharacters(in: .whitespaces).isEmpty
+                                if blank { v.jobs = [Job(single: true)] } else { v.jobs.append(Job(single: true)) }
+                            } label: { Label("Single location", systemImage: "plus") }
+                            Spacer()
+                            Button { v.jobs.append(Job()) } label: { Label("Add another job", systemImage: "plus") }
+                        }
+                        .font(.subheadline.weight(.semibold))
                     }
                     HStack(spacing: 12) {
                         TimeField(label: "Clock in", value: $v.clockIn)

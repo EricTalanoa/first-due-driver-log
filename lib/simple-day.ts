@@ -57,12 +57,15 @@ export function nearestCity(p: { lat: number; lon: number }, maxMiles = 8) {
   return best;
 }
 
-export type Job = { load: string; unload: string };
+/** A job. `single` marks a single-location job (labor only, moving things around in one place): just `load` is used, as the place. */
+export type Job = { load: string; unload: string; single?: boolean };
 export type SimpleDay = { date: string; office: Office; jobs: Job[]; clockIn: string; clockOut: string; lunch: number; miles?: number | null };
 export type Plan = { entries: Entry[]; miles: number; driveMin: number; unknown: string[]; route: string[] };
 
 const SIMPLE_TAG = 'Simple day entry';
 const LD_TAG = 'LD day entry';
+const SINGLE_WORK = 'Labor, single location';
+const SINGLE_DRIVE = 'To job site';
 const jobTag = (n: number, total: number) => (total > 1 ? ` (job ${n})` : '');
 
 type Pt = { lat: number; lon: number };
@@ -148,13 +151,17 @@ function layDay(d: Day, start: End, stops: Stop[], end: End, tag: string, zone: 
 const officeEnd = (o: Office, back = 'Return to office', route = 'back'): End => ({ name: offices[o].label, text: o, point: offices[o], pre: 'Pre-trip inspection / prep at office', post: 'Post-trip / unload equipment at office', back, route });
 
 /**
- * Lays out a day: pre-trip, then for each job drive to load, load, drive to unload, unload;
- * drive back, post-trip. Lunch goes in whichever stop is nearest the middle of the shift.
+ * Lays out a day: pre-trip, then for each job drive to load, load, drive to unload, unload (or, for a single-location
+ * job, drive there and work); drive back, post-trip. Lunch goes in whichever stop is nearest the middle of the shift.
  */
 export function planSimpleDay(d: SimpleDay, zone: string, newId: () => string = () => crypto.randomUUID()): Plan {
-  const jobs = d.jobs.map(j => ({ load: j.load.trim(), unload: j.unload.trim() })).filter(j => j.load || j.unload);
-  if (!jobs.length || jobs.some(j => !j.load || !j.unload)) throw new Error(d.jobs.length > 1 ? 'Enter a load city and an unload city for each job.' : 'Enter both a load city and an unload city.');
-  const stops = jobs.flatMap((j, n) => [
+  const jobs = d.jobs.map(j => ({ load: j.load.trim(), unload: j.single ? '' : j.unload.trim(), single: !!j.single })).filter(j => j.load || j.unload);
+  if (!jobs.length || jobs.some(j => !j.load || (!j.single && !j.unload))) {
+    throw new Error(d.jobs.length > 1 ? 'Enter the cities for each job.' : jobs[0]?.single || d.jobs[0]?.single ? 'Enter the city of the job.' : 'Enter both a load city and an unload city.');
+  }
+  const stops = jobs.flatMap((j, n) => j.single ? [
+    { text: j.load, city: findCity(j.load), work: `${SINGLE_WORK}${jobTag(n + 1, jobs.length)}`, drive: `${SINGLE_DRIVE}${jobTag(n + 1, jobs.length)}` },
+  ] : [
     { text: j.load, city: findCity(j.load), work: `Loading${jobTag(n + 1, jobs.length)}`, drive: `To load${jobTag(n + 1, jobs.length)}` },
     { text: j.unload, city: findCity(j.unload), work: `Unloading${jobTag(n + 1, jobs.length)}`, drive: `To unload${jobTag(n + 1, jobs.length)}` },
   ]);
@@ -223,9 +230,10 @@ export function readSimpleDay(entries: Entry[], zone: string): SimpleDay | null 
   for (const e of es) {
     if (e.status !== 'Driving') continue;
     if (e.note.startsWith('To load')) jobs.push({ load: city(e.to), unload: '' });
+    else if (e.note.startsWith(SINGLE_DRIVE)) jobs.push({ load: city(e.to), unload: '', single: true });
     else if (e.note.startsWith('To unload') && jobs.length) jobs[jobs.length - 1].unload = city(e.to);
   }
-  if (!jobs.length || jobs.some(j => !j.unload)) return null;
+  if (!jobs.length || jobs.some(j => !j.single && !j.unload)) return null;
   const lunch = es.filter(e => e.status === 'Off duty' && e.note === 'Lunch break').reduce((n, e) => n + (e.end! - e.start) / 60000, 0);
   const day: SimpleDay = { date: dayKey(es[0].start, zone), office, jobs, clockIn: localInput(es[0].start, zone).slice(11), clockOut: localInput(es[es.length - 1].end!, zone).slice(11), lunch: Math.round(lunch), miles: null };
   // If the saved miles differ from the city estimate, the driver typed odometer miles; keep them.

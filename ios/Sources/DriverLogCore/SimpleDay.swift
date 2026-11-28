@@ -107,10 +107,12 @@ public func driveMinutes(_ mi: Double) -> Int {
     return Int((mi / mph * 60).rounded()) + 3
 }
 
+/// A job. `single` marks a single-location job (labor only, moving things around in one place): just `load` is used, as the place.
 public struct Job: Equatable, Codable, Sendable {
     public var load: String
     public var unload: String
-    public init(load: String = "", unload: String = "") { self.load = load; self.unload = unload }
+    public var single: Bool
+    public init(load: String = "", unload: String = "", single: Bool = false) { self.load = load; self.unload = unload; self.single = single }
 }
 
 public struct SimpleDay: Equatable, Sendable {
@@ -143,6 +145,8 @@ public struct Plan: Sendable {
 
 private let simpleTag = "Simple day entry"
 private let ldTag = "LD day entry"
+private let singleWork = "Labor, single location"
+private let singleDrive = "To job site"
 
 private func round1(_ x: Double) -> Double { (x * 10).rounded() / 10 }
 
@@ -253,14 +257,19 @@ private func layDay(date: String, clockIn: String, clockOut: String, lunch dayLu
 /// Lays out a day: pre-trip, then for each job drive to load, load, drive to unload, unload;
 /// drive back, post-trip. Lunch goes in whichever stop is nearest the middle of the shift.
 public func planSimpleDay(_ d: SimpleDay, zone: TimeZone, newID: () -> String = { UUID().uuidString.lowercased() }) throws -> Plan {
-    let jobs = d.jobs.map { Job(load: $0.load.trimmingCharacters(in: .whitespaces), unload: $0.unload.trimmingCharacters(in: .whitespaces)) }
+    let jobs = d.jobs.map { Job(load: $0.load.trimmingCharacters(in: .whitespaces), unload: $0.single ? "" : $0.unload.trimmingCharacters(in: .whitespaces), single: $0.single) }
         .filter { !$0.load.isEmpty || !$0.unload.isEmpty }
-    if jobs.isEmpty || jobs.contains(where: { $0.load.isEmpty || $0.unload.isEmpty }) {
-        throw LogError(d.jobs.count > 1 ? "Enter a load city and an unload city for each job." : "Enter both a load city and an unload city.")
+    if jobs.isEmpty || jobs.contains(where: { $0.load.isEmpty || (!$0.single && $0.unload.isEmpty) }) {
+        throw LogError(d.jobs.count > 1 ? "Enter the cities for each job."
+                       : (jobs.first?.single ?? d.jobs.first?.single ?? false) ? "Enter the city of the job." : "Enter both a load city and an unload city.")
     }
     let tag = { (n: Int) in jobs.count > 1 ? " (job \(n))" : "" }
     var stops: [Stop] = []
     for (i, j) in jobs.enumerated() {
+        if j.single {
+            stops.append(Stop(text: j.load, city: Cities.find(j.load), work: "\(singleWork)\(tag(i + 1))", drive: "\(singleDrive)\(tag(i + 1))"))
+            continue
+        }
         stops.append(Stop(text: j.load, city: Cities.find(j.load), work: "Loading\(tag(i + 1))", drive: "To load\(tag(i + 1))"))
         stops.append(Stop(text: j.unload, city: Cities.find(j.unload), work: "Unloading\(tag(i + 1))", drive: "To unload\(tag(i + 1))"))
     }
@@ -365,9 +374,10 @@ public func readSimpleDay(_ entries: [Entry], zone: TimeZone) -> SimpleDay? {
     var jobs: [Job] = []
     for e in es where e.status == .driving {
         if e.note.hasPrefix("To load") { jobs.append(Job(load: city(e.to))) }
+        else if e.note.hasPrefix(singleDrive) { jobs.append(Job(load: city(e.to), single: true)) }
         else if e.note.hasPrefix("To unload"), !jobs.isEmpty { jobs[jobs.count - 1].unload = city(e.to) }
     }
-    guard !jobs.isEmpty, !jobs.contains(where: { $0.unload.isEmpty }) else { return nil }
+    guard !jobs.isEmpty, !jobs.contains(where: { !$0.single && $0.unload.isEmpty }) else { return nil }
     let clock = Clock(zone: zone)
     let lunch = es.filter { $0.status == .offDuty && $0.note == "Lunch break" }.reduce(0.0) { $0 + $1.end!.timeIntervalSince($1.start) / 60 }
     var day = SimpleDay(date: clock.dayKey(first.start), office: office, jobs: jobs, clockIn: clock.hhmm(first.start), clockOut: clock.hhmm(es.last!.end!), lunch: Int(lunch.rounded()))

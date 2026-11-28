@@ -18,7 +18,7 @@ Every pull request runs these automatically on GitHub. Nothing in them touches t
 - **Co-driver:** riding is logged as on duty; taking the wheel back starts a drive.
 - **Unknown city:** miles are asked for before saving.
 - **Clear day:** removes the whole day, including a drive in progress; other days stay.
-- **Simple day:** add, Edit day, change lunch, Clear day; a clash with existing entries is explained, not saved.
+- **Simple day:** add, Edit day, change lunch, Clear day; a single-location (labor only) job, alone or with a regular one; a clash with existing entries is explained, not saved.
 - **Fill in a day:** steps past midnight, the next day's chart, Edit day on either day opens the whole shift.
 - **Advanced entry:** add, edit, delete.
 - **Failures:** a save that doesn't reach the server keeps the form open; the phone and the website changing the log at once.
