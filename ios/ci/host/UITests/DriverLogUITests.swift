@@ -103,7 +103,7 @@ final class DriverLogUITests: XCTestCase {
         app.swipeUp()
         button.tap()
         XCTAssertTrue(app.staticTexts["Record of duty status"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["Eric Talanoa"].exists)
+        XCTAssertTrue(app.staticTexts["Sample Driver"].exists)
     }
 
     func testHistoryShowsTheLdTrip() {

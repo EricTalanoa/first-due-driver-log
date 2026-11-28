@@ -47,11 +47,14 @@ Data used to track you: **No**. For each type below: *Linked to the user: Yes ·
 | Data type | Why |
 |---|---|
 | Contact Info → Email Address | the account sign-in |
-| Contact Info → Name | driver and co-driver names on the log |
-| User Content → Other User Content | the log: times, places, miles, notes; truck and terminal details |
+| Contact Info → Name | the driver's name on the log |
+| User Content → Other User Content | the log: times, places, miles, notes; truck number |
 | Identifiers → User ID | the account's ID that keeps each driver's log separate |
 
 Not collected: location, contacts, photos, browsing, purchases, diagnostics, usage data.
+
+## Screenshots
+6.9-inch iPhone (1320 x 2868), made by CI: the `appstore-*.png` files on the `ios-screenshots` branch (`ios-screenshots-pr` for a pull request). Upload them in this order: LD driving, Today, an LD step, Inspection view, History, the tutorial.
 
 ## Export compliance
 Uses only standard encryption (HTTPS). `ITSAppUsesNonExemptEncryption` is `NO` in Info.plist, so App Store Connect doesn't ask.
