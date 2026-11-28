@@ -190,7 +190,7 @@ final class DemoBackend: Backend {
             entries.append(Entry(status: .onDuty, start: start.addingTimeInterval(7200), end: start.addingTimeInterval(8100), from: "Ellensburg, WA", note: Activity.fuel.note))
             active = Entry(status: .driving, start: start.addingTimeInterval(8100), from: "Ellensburg, WA", note: "Driving")
         }
-        log = Log(entries: entries, active: active, profile: Profile(name: "Eric Talanoa", vehicle: "12", coDriver: ""))
+        log = Log(entries: entries, active: active, profile: Profile(name: "Sample Driver", vehicle: "12", coDriver: ""))
     }
 
     var isSignedIn: Bool { get async { true } }
